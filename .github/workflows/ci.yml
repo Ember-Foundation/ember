@@ -12,43 +12,50 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     strategy:
+      fail-fast: false
       matrix:
         python-version: ["3.11", "3.12"]
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+      - name: Install liburing-dev (for io_uring extension)
+        run: sudo apt-get update && sudo apt-get install -y liburing-dev
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
         with:
-          python-version: ${{ matrix.python-version }}
-          cache: pip
+          enable-cache: true
+
+      - name: Set up Python ${{ matrix.python-version }}
+        run: uv python install ${{ matrix.python-version }}
 
       - name: Install dependencies
         run: |
-          pip install --upgrade pip setuptools wheel
-          pip install cython
-          pip install -e ".[dev]"
+          uv venv --python ${{ matrix.python-version }}
+          uv pip install --upgrade setuptools wheel cython
+          uv pip install -e ".[dev]"
 
       - name: Build Cython extensions inplace
-        run: python setup.py build_ext --inplace
+        run: uv run python setup.py build_ext --inplace
 
       - name: Verify Cython extensions loaded
         run: |
-          python -c "
+          uv run python -c "
           for m in [
             'ember.protocol.cprotocol',
             'ember.router.router',
             'ember.request.request',
             'ember.response.response',
             'ember.headers.headers',
+            'ember.eventloop.uring',
           ]:
               __import__(m)
           print('All Cython extensions OK')
           "
 
       - name: Run tests
-        run: pytest --tb=short -q
+        run: uv run pytest --tb=short -q
 
   lint:
     name: Lint
@@ -56,9 +63,6 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-          cache: pip
-      - run: pip install ruff
-      - run: ruff check ember/ tests/ --ignore E501
+      - uses: astral-sh/setup-uv@v3
+      - run: uv tool install ruff
+      - run: uv tool run ruff check ember/ tests/ --ignore E501
