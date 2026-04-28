@@ -4,7 +4,7 @@ layout: home
 hero:
   name: "🔥 Ember"
   text: "AI-API-first async HTTP framework"
-  tagline: Cython hot paths · multi-process workers · first-class LLM streaming · Python 3.11+
+  tagline: Cython hot paths · multi-process workers · first-class LLM streaming · Python 3.12+
   actions:
     - theme: brand
       text: Get Started

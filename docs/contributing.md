@@ -21,7 +21,7 @@ pytest
 
 ## Code Style
 
-- Python 3.11+, type hints everywhere
+- Python 3.12+, type hints everywhere
 - No comments unless the _why_ is non-obvious
 - Keep `.pyx` / `.pxd` in sync when adding `cdef` fields
 - New features need a test

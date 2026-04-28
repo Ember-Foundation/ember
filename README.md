@@ -1,7 +1,7 @@
 # 🔥 Ember
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Python](https://img.shields.io/badge/Python-3.11%2B-blue)](https://python.org)
+[![Python](https://img.shields.io/badge/Python-3.12%2B-blue)](https://python.org)
 [![CI](https://github.com/Ember-Foundation/ember/actions/workflows/ci.yml/badge.svg)](https://github.com/Ember-Foundation/ember/actions)
 
 **AI-API-first async HTTP framework for Python** — built for LLM workloads with Cython hot paths, multi-process workers, and first-class streaming.
