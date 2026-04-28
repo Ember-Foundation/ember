@@ -429,6 +429,21 @@ class _SelectorMappingProxy:
     def __iter__(self):
         return iter(self._fd_to_key)
 
+    def __contains__(self, fileobj):
+        try:
+            return _fd_from_fileobj(fileobj) in self._fd_to_key
+        except (AttributeError, TypeError):
+            return False
+
+    # asyncio 3.13's selector_events calls selector.get_map().get(fd) directly
+    # (3.12 used __getitem__ with try/except). Provide the Mapping-style get.
+    def get(self, fileobj, default=None):
+        try:
+            fd = _fd_from_fileobj(fileobj)
+        except (AttributeError, TypeError):
+            return default
+        return self._fd_to_key.get(fd, default)
+
     def values(self):
         return self._fd_to_key.values()
 
