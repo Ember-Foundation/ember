@@ -41,7 +41,7 @@ jobs:
           CIBW_BUILD: "cp311-* cp312-* cp313-*"
           CIBW_SKIP: "*-musllinux_*"
           CIBW_ARCHS_LINUX: ${{ matrix.arch }}
-          CIBW_BEFORE_ALL_LINUX: "yum install -y liburing-devel || apt-get update && apt-get install -y liburing-dev"
+          CIBW_BEFORE_ALL_LINUX: "yum install -y liburing-devel"
           # Distribution wheels: portable baseline, NOT -march=native
           CIBW_ENVIRONMENT_LINUX: "CFLAGS='-O3 -fno-strict-aliasing' CXXFLAGS='-O3'"
           CIBW_TEST_COMMAND: 'python -c "import ember; from ember.eventloop import uring; print(ember.__version__)"'
