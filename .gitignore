@@ -1,0 +1,41 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+.eggs/
+
+# Cython-generated C files — but NOT the vendored llhttp C sources
+*.c
+!ember/vendor/**
+
+# Cython annotation HTML
+*.html
+
+# Pytest
+.pytest_cache/
+htmlcov/
+.coverage
+
+# Docs
+docs/.vitepress/dist/
+docs/node_modules/
+
+# Benchmarks
+benchmarks/.env
+benchmarks/.venv/
+benchmarks/k6/results/*.json
+benchmarks/charts/*.png
+benchmarks/express/node_modules/
+
+# Editors
+.idea/
+.vscode/
+*.swp
+.DS_Store
