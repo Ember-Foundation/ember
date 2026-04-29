@@ -34,6 +34,15 @@ benchmarks/k6/results/*.json
 benchmarks/charts/*.png
 benchmarks/express/node_modules/
 
+# Node — never check in node_modules anywhere
+node_modules/
+
+# hello_bench artifacts (keep apps/, k6_hello.js, bench_*.sh, results.{csv,md})
+taskbench/hello_bench/apps/fiber/fiberbench
+taskbench/hello_bench/results/*.log
+taskbench/hello_bench/results/*-samples.txt
+taskbench/hello_bench/results/*-k6.txt
+
 # Editors
 .idea/
 .vscode/
