@@ -8,6 +8,7 @@ Build:
     pip install cython
     python setup.py build_ext --inplace
 """
+import os
 import platform
 import sys
 from setuptools import setup
@@ -33,11 +34,14 @@ def _platform_flags() -> tuple[list[str], list[str]]:
     system = platform.system()
     if system == "Windows":
         return ["/O2", "/GS-"], []
-    return (
-        ["-O3", "-march=native", "-ffast-math",
-         "-Wno-unused-variable", "-Wno-unused-function"],
-        ["-O3"],
-    )
+    # Distribution wheels (cibuildwheel) need a portable baseline — -march=native
+    # bakes the build host's CPU into the binary and breaks on user machines, and
+    # under QEMU emulation it can even pick up extensions the assembler rejects.
+    portable = os.environ.get("CIBUILDWHEEL") == "1"
+    compile_args = ["-O3", "-Wno-unused-variable", "-Wno-unused-function"]
+    if not portable:
+        compile_args[1:1] = ["-march=native", "-ffast-math"]
+    return compile_args, ["-O3"]
 
 
 def make_extension(
