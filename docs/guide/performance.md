@@ -15,26 +15,58 @@ This guide is in two parts:
 
 ## Headline Numbers
 
-Single worker, Python 3.12, Linux 6.8, kernel `io_uring` event loop,
-`GET /hello → "Hello, World!"`, k6 200 VUs:
+Single worker, Python 3.12+, Linux 6.8, kernel `io_uring` event loop,
+`GET /hello → "Hello, World!"`, k6 200 VUs.
 
-| Build                                         | RPS         | p50    | p95    | p99    |
-| --------------------------------------------- | ----------- | ------ | ------ | ------ |
-| Pure Python (asyncio + epoll)                 | ~1,750      | 28 ms  | 52 ms  | 95 ms  |
-| + Cython hot paths                            | ~2,350      | 20 ms  | 38 ms  | 70 ms  |
-| + uvloop                                      | ~2,650      | 16 ms  | 30 ms  | 55 ms  |
-| **+ io_uring + buffer-ring (v0.1.5)**         | **~72,000** | 4 ms   | 12 ms  | 28 ms  |
+### Ember build evolution
+
+How Ember got to its current throughput, layer by layer:
+
+| Build                                           | RPS          | p50      | p95      | p99      |
+| ----------------------------------------------- | ------------ | -------- | -------- | -------- |
+| Pure Python (asyncio + epoll)                   | ~1,750       | 28 ms    | 52 ms    | 95 ms    |
+| + Cython hot paths                              | ~2,350       | 20 ms    | 38 ms    | 70 ms    |
+| + uvloop                                        | ~2,650       | 16 ms    | 30 ms    | 55 ms    |
+| **+ io_uring + buffer-ring (v0.1.5)**           | **~72,000**  | 4 ms     | 12 ms    | 28 ms    |
 | **+ eager-task / simple-call fast path (HEAD)** | **~120,000** | **2 ms** | **8 ms** | **22 ms** |
-| FastAPI (uvicorn + uvloop, 1 worker)          | ~1,800      | 28 ms  | 9.2 s  | 14.0 s |
-| Express.js (1 worker)                         | ~2,340      | 18 ms  | 109 ms | 164 ms |
 
-CRUD benchmark (4 routes, mixed read / write, 200 VUs, 5,935 requests):
+### Cross-framework comparison
 
-| Framework | p50      | p95     | p99      | avg      | error rate |
-| --------- | -------- | ------- | -------- | -------- | ---------- |
+All five frameworks running an equivalent `GET /hello → "Hello, World!"` route
+on the same Intel i7-14700 box, single worker, k6 200 VUs / 20 s, 0% errors.
+Fiber pinned to one core via `GOMAXPROCS=1` for fairness.
+
+| Framework        |       RPS | avg (ms) | p50 (ms) | p95 (ms) | p99 (ms) | peak CPU | peak RSS |
+| ---------------- | --------: | -------: | -------: | -------: | -------: | -------: | -------: |
+| **Fiber (Go)**   | **120,912** |     1.59 |     1.43 |     3.35 |     4.54 |    90.2% |    9 MB  |
+| **Ember**        |  **91,156** |     2.16 |     1.99 |     3.77 |     5.95 |    89.6% |   48 MB  |
+| Express (Node)   |    22,695 |     8.77 |     8.08 |    12.26 |    17.32 |   106.0% |  130 MB  |
+| NestJS (Node)    |    20,091 |     9.91 |     9.39 |    13.48 |    17.51 |   109.0% |  157 MB  |
+| FastAPI (Python) |    15,697 |    12.67 |    11.24 |    20.58 |    26.17 |    89.5% |   49 MB  |
+
+Notes:
+
+- Ember is **75% of Fiber's RPS in pure Python** — the closest a Python
+  framework gets to a Go fasthttp framework on the same single core.
+- Ember vs equivalent stacks: **5.8× FastAPI**, **4.0× Express**, **4.5× NestJS**.
+- CPU > 100% on Node frameworks reflects libuv worker threads + V8 GC running
+  off the main event loop; Fiber, Ember, and FastAPI all sit at the
+  single-core ceiling (~90%).
+- Ember's RSS sits at the Python interpreter floor (~48 MB), in the same
+  bucket as FastAPI but **3× lighter than Node** under load.
+
+Reproducible: [`taskbench/hello_bench/`](https://github.com/Ember-Foundation/ember/tree/master/taskbench/hello_bench)
+— `./bench_all.sh` builds dependencies and runs all five back-to-back.
+
+### CRUD benchmark (mixed reads + writes)
+
+4 routes, mixed read/write, 200 VUs, 5,935 requests:
+
+| Framework | p50      | p95      | p99       | avg      | error rate |
+| --------- | -------- | -------- | --------- | -------- | ---------- |
 | FastAPI   | 1,230 ms | 9,223 ms | 14,066 ms | 2,577 ms | 0.000%     |
-| **Ember** | **53 ms**  | **359 ms** | **762 ms**  | **97 ms**  | 2.443%     |
-| Express   | 18 ms    | 109 ms  | 164 ms   | 30 ms    | 0.000%     |
+| **Ember** | **53 ms**| **359 ms**| **762 ms**| **97 ms**| 2.443%     |
+| Express   |    18 ms |   109 ms |    164 ms |    30 ms | 0.000%     |
 
 > The 2.4% error rate at 200 VUs is keep-alive churn under spike, not handler
 > failures — see [tuning](#step-7--tune-keep-alive). Ember is bottlenecked on

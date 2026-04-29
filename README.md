@@ -12,16 +12,31 @@
 
 ## Why Ember
 
-| | Ember | FastAPI | Express |
-|---|---|---|---|
-| **Protocol** | Custom llhttp + Cython | ASGI / uvicorn | Node.js http |
-| **Workers** | Fork + SO_REUSEPORT | Single process | cluster |
-| **SSE streaming** | Native, zero-copy | via starlette | manual |
-| **AI primitives** | Built-in | none | none |
-| **Hello-world RPS** | **~2,650** | ~1,800 | ~2,340 |
-| **p50 latency** | **~16 ms** | ~28 ms | ~22 ms |
+| | Ember | FastAPI | Express | NestJS |
+|---|---|---|---|---|
+| **Protocol** | llhttp + Cython + io_uring | ASGI / uvicorn | Node.js http | Node.js http |
+| **Workers** | Fork + SO_REUSEPORT | Single process | cluster | cluster |
+| **SSE streaming** | Native, zero-copy | via starlette | manual | manual |
+| **AI primitives** | Built-in | none | none | none |
 
-_Benchmarked at 200 VUs on a single machine. See [`benchmarks/`](benchmarks/)._
+### Hello-world benchmark (single worker, k6 200 VUs / 20 s)
+
+`GET /hello → "Hello, World!"`, all running on the same Intel i7-14700 box,
+0% error rate. Fiber pinned to one core (`GOMAXPROCS=1`) for fairness.
+
+| Framework         |       RPS |  p50 (ms) | p99 (ms) | peak RSS |
+| ----------------- | --------: | --------: | -------: | -------: |
+| **Fiber (Go)**    | **120,912** |  1.43 |  4.54 |    9 MB |
+| **Ember**         |  **91,156** |  1.99 |  5.95 |   48 MB |
+| Express (Node)    |    22,695 |  8.08 | 17.32 |  130 MB |
+| NestJS (Node)     |    20,091 |  9.39 | 17.51 |  157 MB |
+| FastAPI (Python)  |    15,697 | 11.24 | 26.17 |   49 MB |
+
+Ember reaches **75% of Fiber's throughput in pure Python**, while running
+**5.8× FastAPI**, **4.0× Express**, and **4.5× NestJS** on identical hardware.
+
+Reproducible: see [`taskbench/hello_bench/`](taskbench/hello_bench/) — run
+`./bench_all.sh`.
 
 ---
 
