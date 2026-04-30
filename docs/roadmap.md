@@ -47,6 +47,11 @@ See [`docs/guide/performance.md`](./guide/performance) for the full story.
 - [ ] **Structured access log middleware** — JSON logs: method, path, status, duration, client IP
 - [ ] **Response gzip/brotli compression** — `Accept-Encoding` negotiation, configurable threshold
 - [ ] **`ember dev --reload`** — watch `.py` files, restart worker on change
+- [ ] **OpenTelemetry traces + metrics** — OTLP exporter, `EMBER_OTEL_ENDPOINT` env var (promoted from Long-term Ideas)
+- [ ] **JWT verify middleware** — JWKS rotation, RS256/ES256/HS256 (Bearer auth in v0.1 is signature-less)
+- [ ] **Liveness + readiness endpoints** — built-in `/healthz` + `/readyz`, opt-out
+- [ ] **Graceful drain on `SIGTERM`** — finish in-flight requests, configurable `shutdown_timeout`
+- [ ] **`SECURITY.md` + CVE disclosure process** — coordinated GHSA workflow
 
 ---
 
@@ -59,6 +64,14 @@ See [`docs/guide/performance.md`](./guide/performance) for the full story.
 - [ ] **Static file serving** — `app.static("/assets", "./public")` using `sendfile()` zero-copy
 - [ ] **Session backends** — Redis session store, signed cookie sessions
 - [ ] **`ember test`** — built-in async test client, no httpx setup required
+- [ ] **OAuth2 / OIDC middleware** — authorization-code + client-credentials flows
+- [ ] **RBAC primitives** — `@requires(scope=...)` decorator + `Principal` on `Request`
+- [ ] **Sentry / Datadog APM hooks** — exception + perf event integration
+- [ ] **Type stubs (`py.typed` + `.pyi`)** — full stubs for Cython modules; mypy/pyright clean
+- [ ] **FastAPI + Flask migration guides** — side-by-side route / `Depends` / Pydantic mapping
+- [ ] **Helm chart** — `charts/ember/` with HPA, PodDisruptionBudget, ServiceMonitor
+- [ ] **Distroless container image** — multi-arch (`linux/amd64`, `linux/arm64`) on GHCR
+- [ ] **Public RFC process + `governance.md`** — `rfcs/` directory, decision-making charter
 
 ---
 
@@ -70,6 +83,8 @@ See [`docs/guide/performance.md`](./guide/performance) for the full story.
 - [ ] **Request streaming** — chunked upload progress hooks
 - [ ] **Connection pooling** — outbound HTTP pool for downstream service calls
 - [ ] **Circuit breaker** — automatic fallback when downstream is unhealthy
+- [ ] **mTLS support** — `ssl_context` client-cert verification on the listener
+- [ ] **ASGI compatibility shim** — run an ASGI app behind Ember for incremental migration
 
 ---
 
@@ -93,6 +108,8 @@ groundwork is mostly there. The work:
       worker process.
 - [ ] CI matrix: `cp313t-linux`, `cp313t-macos`, falling back to GIL build
       with no API change.
+- [ ] **Reproducible benchmark CI** — k6 nightly against pinned hardware
+      profile, regression gate
 
 **Target throughput:** ~500k RPS per worker (4 threads × 120k), 1M+ RPS on
 modest hardware.
@@ -233,6 +250,74 @@ around 25k.
 - [ ] Official PyPI `ember-api` wheel with pre-built Cython binaries for
       Linux x86_64, ARM64, macOS (both GIL and `t` ABIs)
 - [ ] `ember.orm` 1.0 with Postgres, MySQL, SQLite, Redis stable
+- [ ] **Signed releases** — Sigstore / cosign on PyPI artifacts + GitHub
+      release assets
+- [ ] **SBOM publishing** — CycloneDX JSON per release
+- [ ] **Third-party security audit** — scoped to llhttp parser + io_uring path
+- [ ] **Reference apps** — production-shaped sample (auth + DB + OTel + Helm)
+- [ ] **Semver + LTS policy** — N-1 minor support, 18-month security backports
+- [ ] **Paid support tier** — link to Ember Foundation commercial page
+
+---
+
+## Industry Adoption Track
+
+The items below are scattered across versions but listed here together so
+enterprise evaluators can see Ember's production-readiness story at a glance.
+Each row also appears as a checkbox bullet in the version section above.
+
+### Security & Auth
+
+| Item | Lands in | Notes |
+|------|----------|-------|
+| `SECURITY.md` + CVE disclosure | v0.2.0 | coordinated GHSA workflow |
+| JWT verify middleware | v0.2.0 | JWKS rotation, RS256/ES256/HS256 |
+| OAuth2 / OIDC middleware | v0.3.0 | authorization-code + client-credentials |
+| RBAC primitives | v0.3.0 | `@requires(scope=...)`, `Principal` on `Request` |
+| mTLS on listener | v0.4.0 | client-cert verification via `ssl_context` |
+| Signed releases | v1.0.0 | Sigstore / cosign on PyPI + GitHub releases |
+| SBOM publishing | v1.0.0 | CycloneDX JSON per release |
+| Third-party security audit | v1.0.0 | scoped to llhttp parser + io_uring path |
+
+### Observability
+
+| Item | Lands in | Notes |
+|------|----------|-------|
+| OpenTelemetry traces + metrics | v0.2.0 | OTLP exporter, `EMBER_OTEL_ENDPOINT` |
+| Prometheus metrics endpoint | v0.2.0 | already in Observability release |
+| Structured JSON access logs | v0.2.0 | already in Observability release |
+| Sentry / Datadog APM hooks | v0.3.0 | exception + perf event integration |
+| Reproducible benchmark CI | v0.5.0 | k6 nightly, regression gate |
+
+### Kubernetes & Cloud-Native
+
+| Item | Lands in | Notes |
+|------|----------|-------|
+| `/healthz` + `/readyz` endpoints | v0.2.0 | built-in, opt-out |
+| Graceful drain on `SIGTERM` | v0.2.0 | configurable `shutdown_timeout` |
+| Helm chart | v0.3.0 | HPA, PDB, ServiceMonitor |
+| Distroless multi-arch image | v0.3.0 | `linux/amd64`, `linux/arm64` on GHCR |
+| Multi-arch pre-built wheels | v1.0.0 | x86_64 / ARM64 / macOS, GIL + `t` ABIs |
+
+### Migration & Compatibility
+
+| Item | Lands in | Notes |
+|------|----------|-------|
+| FastAPI migration guide | v0.3.0 | side-by-side route / `Depends` / Pydantic |
+| Flask migration guide | v0.3.0 | Blueprints map cleanly; document gotchas |
+| Type stubs (`py.typed` + `.pyi`) | v0.3.0 | full Cython-module stubs, mypy/pyright clean |
+| ASGI compatibility shim | v0.4.0 | run an ASGI app behind Ember for incremental cut-over |
+
+### Governance & Stability
+
+| Item | Lands in | Notes |
+|------|----------|-------|
+| Public RFC process | v0.3.0 | `rfcs/` directory, ratification quorum |
+| Maintainer charter (`governance.md`) | v0.3.0 | decision-making, conflict resolution |
+| Performance regression CI gate | v1.0.0 | already in v1.0 release |
+| Semver + LTS policy | v1.0.0 | N-1 minor support, 18-month security backports |
+| Reference apps | v1.0.0 | full-stack sample: auth + DB + OTel + Helm |
+| Paid support tier | v1.0.0 | link to Ember Foundation commercial page |
 
 ---
 
@@ -242,7 +327,6 @@ around 25k.
 |------|-------|
 | HTTP/3 (QUIC) | via `aioquic` or native `io_uring` UDP support |
 | GraphQL over SSE/WebSocket | subscription support |
-| Distributed tracing | OpenTelemetry integration |
 | Edge/worker deployment | WASM-compatible pure-Python mode |
 | gRPC gateway | transcode REST → gRPC |
 | AF_XDP fast path | bypass the kernel network stack for the busiest routes |

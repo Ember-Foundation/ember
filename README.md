@@ -96,6 +96,22 @@ thundering-herd reads onto a single PostgreSQL roundtrip.
 
 ---
 
+## Roadmap
+
+What's coming next — see the [full roadmap](https://ember-foundation.github.io/ember/roadmap) for design notes and throughput targets.
+
+- **WebSockets + OpenTelemetry + Prometheus + access logs** — `v0.2.0`, Q3 2026
+- **OpenAPI auto-gen + Pydantic v2 bodies + type stubs** — `v0.3.0`, Q4 2026
+- **HTTP/2 multiplexing** — `v0.4.0`, Q1 2027
+- **Free-threaded Python (PEP 703)** — `v0.5.0`, Q2 2027 — target ~500k RPS / worker
+- **`prepare`-chained `io_uring` fast path** — `v0.6.0`, Q3 2027 — 3× cached-route RPS, p99 < 1 ms
+- **High-performance Cython ORM** — `v0.7.0`, Q4 2027 — Postgres / MySQL / SQLite / MSSQL / Oracle / CockroachDB / Redis; target 80k RPS on `SELECT WHERE id=$1` (vs ~25k with `asyncpg`)
+- **Stable 1.0** — Q1 2028 — semver lock, signed releases, SBOM, multi-arch wheels (x86_64 / ARM64 / macOS, GIL + `t` ABIs)
+
+**Industry adoption track** — auth (OAuth2 / OIDC / JWT / mTLS), OpenTelemetry, Kubernetes probes & graceful drain, Helm chart, FastAPI/Flask migration guides, signed releases, SBOM, third-party security audit. Lands across v0.2 → v1.0 — see [Industry Adoption Track](https://ember-foundation.github.io/ember/roadmap#industry-adoption-track).
+
+---
+
 ## Install
 
 ```bash
