@@ -565,6 +565,15 @@ cdef class UringTransport:
     def set_write_buffer_limits(self, high=None, low=None):
         pass
 
+    def get_protocol(self):
+        return self._protocol
+
+    def set_protocol(self, protocol):
+        # Required by asyncio.Transport interface — used by asyncpg / aiohttp /
+        # any code that swaps the protocol mid-connection (e.g. for STARTTLS
+        # upgrades). Mirrors asyncio.SelectorTransport.set_protocol semantics.
+        self._protocol = protocol
+
     def get_write_buffer_size(self):
         n = sum(len(d) for d in self._send_queue)
         if self._send_inflight_data is not None:

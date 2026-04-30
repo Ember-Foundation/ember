@@ -1,0 +1,77 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0d1117"/>
+      <stop offset="100%" stop-color="#1a1f2e"/>
+    </linearGradient>
+    <linearGradient id="flame" x1="0.5" y1="0" x2="0.5" y2="1">
+      <stop offset="0%" stop-color="#ffd166"/>
+      <stop offset="55%" stop-color="#ff8c42"/>
+      <stop offset="100%" stop-color="#ff6b35"/>
+    </linearGradient>
+    <linearGradient id="brand" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#ffb84d"/>
+      <stop offset="100%" stop-color="#ff6b35"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.18" cy="0.5" r="0.5">
+      <stop offset="0%" stop-color="#ff6b35" stop-opacity="0.22"/>
+      <stop offset="100%" stop-color="#ff6b35" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <rect width="1200" height="630" fill="url(#bg)"/>
+  <rect width="1200" height="630" fill="url(#glow)"/>
+
+  <!-- Subtle grid -->
+  <g stroke="#2a3041" stroke-width="1" opacity="0.35">
+    <line x1="0" y1="120"  x2="1200" y2="120"/>
+    <line x1="0" y1="240"  x2="1200" y2="240"/>
+    <line x1="0" y1="360"  x2="1200" y2="360"/>
+    <line x1="0" y1="480"  x2="1200" y2="480"/>
+  </g>
+
+  <!-- Flame logo (left, large) -->
+  <g transform="translate(115, 175) scale(7.1)">
+    <path d="M20 2 C14 10 8 14 10 22 C11 27 14 30 20 38 C26 30 29 27 30 22 C32 14 26 10 20 2Z"
+          fill="url(#flame)"/>
+    <path d="M20 12 C17 17 14 19 15 24 C16 27 18 29 20 33 C22 29 24 27 25 24 C26 19 23 17 20 12Z"
+          fill="#ffe69c" opacity="0.75"/>
+  </g>
+
+  <!-- Wordmark + tagline -->
+  <g font-family="-apple-system,BlinkMacSystemFont,Inter,Segoe UI,sans-serif">
+    <text x="450" y="200" fill="url(#brand)" font-size="120" font-weight="800" letter-spacing="-3">Ember</text>
+    <text x="450" y="252" fill="#cdd9e5" font-size="28" font-weight="500" letter-spacing="-0.3">
+      The Python framework that runs at Go-tier speed.
+    </text>
+
+    <!-- Stat row -->
+    <g transform="translate(450, 320)">
+      <!-- 112k RPS -->
+      <text x="0" y="0" fill="#ffffff" font-size="64" font-weight="800" letter-spacing="-2">112k</text>
+      <text x="0" y="34" fill="#7c8493" font-size="18" font-weight="500" letter-spacing="0.5">RPS · single-thread</text>
+
+      <!-- 25 MB -->
+      <text x="240" y="0" fill="#ffffff" font-size="64" font-weight="800" letter-spacing="-2">25<tspan fill="#9aa3b2" font-size="36" font-weight="600"> MB</tspan></text>
+      <text x="240" y="34" fill="#7c8493" font-size="18" font-weight="500" letter-spacing="0.5">Peak RSS</text>
+
+      <!-- 4.35ms p99 -->
+      <text x="450" y="0" fill="#ffffff" font-size="64" font-weight="800" letter-spacing="-2">4.35<tspan fill="#9aa3b2" font-size="36" font-weight="600"> ms</tspan></text>
+      <text x="450" y="34" fill="#7c8493" font-size="18" font-weight="500" letter-spacing="0.5">p99 latency</text>
+    </g>
+
+    <!-- Bottom strip -->
+    <g transform="translate(450, 470)">
+      <rect x="-10" y="-30" width="700" height="60" rx="12" fill="#1a2030" stroke="#2a3041" stroke-width="1"/>
+      <text x="20" y="6" fill="#ffb84d" font-size="22" font-weight="700">6.4× FastAPI</text>
+      <text x="220" y="6" fill="#cdd9e5" font-size="22" font-weight="600">·</text>
+      <text x="240" y="6" fill="#ffb84d" font-size="22" font-weight="700">4.3× Express</text>
+      <text x="440" y="6" fill="#cdd9e5" font-size="22" font-weight="600">·</text>
+      <text x="460" y="6" fill="#ffb84d" font-size="22" font-weight="700">80% of Fiber</text>
+    </g>
+
+    <!-- Pip + URL -->
+    <text x="450" y="568" fill="#7c8493" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="20">pip install ember-api</text>
+    <text x="450" y="595" fill="#5b6172" font-size="16">ember-foundation.github.io/ember</text>
+  </g>
+</svg>

@@ -18,7 +18,9 @@ const allDuration    = new Trend('all_duration',    true);
 let taskIds = [];
 
 export function setup() {
-  const res = http.get(`${BASE}/tasks/all`);
+  // Fetch one page to get a workable pool of IDs without paying the
+  // serialize-all-rows cost on huge tables.
+  const res = http.get(`${BASE}/tasks?page=1&limit=500`);
   if (res.status === 200) {
     taskIds = JSON.parse(res.body).tasks.map(t => t.id);
     console.log(`Ember: loaded ${taskIds.length} task IDs`);
@@ -27,6 +29,7 @@ export function setup() {
 }
 
 export const options = {
+  setupTimeout: '120s',
   summaryTrendStats: ['avg', 'min', 'p(50)', 'p(90)', 'p(95)', 'p(99)', 'max'],
   scenarios: {
     warmup: {

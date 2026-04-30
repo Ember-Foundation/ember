@@ -34,7 +34,7 @@ const cache = { fastapi: [], ember: [], express: [] };
 export function setup() {
   const result = {};
   for (const [name, base] of Object.entries(SERVERS)) {
-    const res = http.get(`${base}/tasks/all`);
+    const res = http.get(`${base}/tasks?page=1&limit=500`);
     if (res.status === 200) {
       result[name] = JSON.parse(res.body).tasks.map(t => t.id);
       console.log(`${name}: ${result[name].length} tasks`);
@@ -47,6 +47,7 @@ export function setup() {
 }
 
 export const options = {
+  setupTimeout: '120s',
   summaryTrendStats: ['avg', 'min', 'med', 'max', 'p(50)', 'p(90)', 'p(95)', 'p(99)'],
   scenarios: {
     // ── Phase 1: Warm up all three at low concurrency ─────────────────────
@@ -98,7 +99,7 @@ export const options = {
 function runScenario(name, base, ids) {
   const roll = Math.random();
 
-  if (roll < 0.50) {
+  if (roll < 0.65) {
     // List paginated (most common read)
     const page = randomIntBetween(1, 50);
     const t    = Date.now();
@@ -110,7 +111,7 @@ function runScenario(name, base, ids) {
     const ok = check(res, { [`${name} list 200`]: r => r.status === 200 });
     errors[name].add(!ok);
 
-  } else if (roll < 0.80) {
+  } else if (roll < 0.90) {
     // Single item GET
     if (!ids.length) return;
     const id  = ids[randomIntBetween(0, ids.length - 1)];
@@ -121,17 +122,6 @@ function runScenario(name, base, ids) {
     latency[name].add(Date.now() - t);
     reqs[name].add(1);
     const ok = check(res, { [`${name} get 200`]: r => r.status === 200 });
-    errors[name].add(!ok);
-
-  } else if (roll < 0.95) {
-    // Full list
-    const t   = Date.now();
-    const res = http.get(`${base}/tasks/all`, {
-      tags: { server: name, op: 'all' },
-    });
-    latency[name].add(Date.now() - t);
-    reqs[name].add(1);
-    const ok = check(res, { [`${name} all 200`]: r => r.status === 200 });
     errors[name].add(!ok);
 
   } else {

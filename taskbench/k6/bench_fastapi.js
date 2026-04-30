@@ -14,7 +14,7 @@ import { check, sleep } from 'k6';
 import { Counter, Rate, Trend } from 'k6/metrics';
 import { randomIntBetween } from 'https://jslib.k6.io/k6-utils/1.4.0/index.js';
 
-const BASE = 'http://localhost:8001';
+const BASE = 'http://localhost:9001';
 
 // Custom metrics
 const errorRate     = new Rate('error_rate');
@@ -27,7 +27,7 @@ const allDuration   = new Trend('all_duration',    true);
 let taskIds = [];
 
 export function setup() {
-  const res = http.get(`${BASE}/tasks/all`);
+  const res = http.get(`${BASE}/tasks?page=1&limit=500`);
   if (res.status === 200) {
     const body = JSON.parse(res.body);
     taskIds = body.tasks.map(t => t.id);
@@ -37,6 +37,7 @@ export function setup() {
 }
 
 export const options = {
+  setupTimeout: '120s',
   scenarios: {
     // ── 1. Paginated list ────────────────────────────────────────────────────
     list_paginated: {

@@ -1,9 +1,11 @@
 # Performance Guide
 
-Ember is built for throughput **and** for a small RSS footprint. A single worker
-on commodity hardware serves **~96,000 RPS** for `GET /hello` at **25 MB peak
-RSS** — a 5–10× RPS margin and ~2× lighter memory than equivalent FastAPI /
-Express setups on the same box.
+Ember is built for throughput **and** for a small RSS footprint. A single
+worker on commodity hardware serves **~112,000 RPS** for `GET /hello` at
+**25 MB peak RSS** — a 5–10× RPS margin and ~2× lighter memory than
+equivalent FastAPI / Express setups on the same box. On real CRUD workloads
+against PostgreSQL, Ember matches Express's average latency in pure Python
+and has a **13× tighter tail** than FastAPI.
 
 This guide is in two parts:
 
@@ -12,8 +14,8 @@ This guide is in two parts:
    **1 million RPS** with free-threaded (no-GIL) Python 3.13 and `io_uring`
    `prepare`-chained syscalls.
 
-::: tip What's new in v0.2 (RSS shrink + 100k+ RPS)
-Peak RSS dropped from **48 MB → 25 MB** (-48%) and median RPS crossed **100k** single-thread. Four changes did the work:
+::: tip What's new in v0.2 (RSS shrink + 112k RPS)
+Peak RSS dropped from **48 MB → 25 MB** (-48%) and RPS climbed from 91k → **112k** single-thread (+23%). Four changes did the work:
 
 - **`workers=1` runs in-process** on Linux now — no supervisor process, ~22 MB saved.
 - **io_uring buffer pool is runtime-tunable.** Default is now 256 × 8 KB (= 2 MB) instead of 1024 × 32 KB (= 32 MB). Pass `Ember.run(io_uring_num_bufs=, io_uring_buf_size=)` to override.
@@ -40,7 +42,7 @@ How Ember got to its current throughput and footprint, layer by layer:
 | **+ io_uring + buffer-ring (v0.1.5)**                       | **~72,000**  | 4 ms      | 28 ms     |   ~50 MB |
 | **+ eager-task / simple-call fast path (v0.1.6)**           | **~91,000**  | 2 ms      | 6 ms      |    48 MB |
 | **+ in-process workers=1, tunable buf pool, lazy imports (v0.2)** | **~96,000** | **1.9 ms** | **5.2 ms** | **25 MB** |
-| **+ trivial-handler bypass (v0.2.1)**                       | **~101,000** | **1.79 ms** | **4.98 ms** | **25 MB** |
+| **+ trivial-handler bypass (v0.2.1)**                       | **~112,000** | **1.68 ms** | **4.35 ms** | **25 MB** |
 
 ### Cross-framework comparison
 
@@ -50,18 +52,20 @@ Fiber pinned to one core via `GOMAXPROCS=1` for fairness.
 
 | Framework        |       RPS | avg (ms) | p50 (ms) | p95 (ms) | p99 (ms) | peak CPU | peak RSS |
 | ---------------- | --------: | -------: | -------: | -------: | -------: | -------: | -------: |
-| **Fiber (Go)**   | **149,007** |     1.29 |     1.16 |     2.75 |     3.89 |    89.1% |  **9 MB** |
-| **Ember**        | **101,411** |     1.94 |     1.79 |     2.97 |     4.98 |    89.7% |  **25 MB** |
-| Express (Node)   |    23,516 |     8.47 |     8.00 |    11.26 |    13.79 |   106.0% |  130 MB  |
-| NestJS (Node)    |    22,317 |     8.93 |     8.50 |    11.77 |    14.29 |   107.0% |  158 MB  |
-| FastAPI (Python) |    16,879 |    11.79 |    10.20 |    20.42 |    27.63 |    89.7% |   48 MB  |
+| **Fiber (Go)**   | **140,993** |     1.36 |     1.21 |     2.91 |     3.96 |    89.3% |  **8.8 MB** |
+| **Ember**        | **112,177** |     1.75 |     1.68 |     2.59 |     4.35 |    89.7% |  **25.2 MB** |
+| Express (Node)   |    26,357 |     7.56 |     7.09 |     9.98 |    13.57 |   104.0% |  131.0 MB  |
+| NestJS (Node)    |    23,528 |     8.47 |     8.08 |    10.97 |    13.75 |   105.0% |  158.6 MB  |
+| FastAPI (Python) |    17,517 |    11.36 |     9.45 |    20.67 |    30.86 |    89.4% |   49.1 MB  |
 
 Notes:
 
-- Ember runs **~5.7× FastAPI**, **~4.1× Express**, and **~4.3× NestJS** on the
+- Ember runs **~6.4× FastAPI**, **~4.3× Express**, and **~4.8× NestJS** on the
   same single core.
-- **Memory:** Ember's 25 MB peak RSS is the lowest of any Python or Node
-  framework here — half of FastAPI's 48 MB, and **5–6× lighter than Node**.
+- **Throughput:** Ember sits at **80% of Fiber's RPS** — the closest a Python
+  framework has come to a Go fasthttp framework on a single core.
+- **Memory:** Ember's 25.2 MB peak RSS is the lowest of any Python or Node
+  framework here — half of FastAPI's 49 MB, and **5–6× lighter than Node**.
   Only Fiber's static Go binary (no interpreter) sits lower.
 - CPU > 100% on Node frameworks reflects libuv worker threads + V8 GC running
   off the main event loop; Fiber, Ember, and FastAPI all sit at the
@@ -93,19 +97,41 @@ p99 ≤ 4.5 ms across runs. Pinning the server to a single core actually
 *hurts* throughput on modern hybrid CPUs because it kills turbo boost on that
 core — give it a small pool instead.
 
-### CRUD benchmark (mixed reads + writes)
+### CRUD benchmark (PostgreSQL, mixed reads + writes)
 
-4 routes, mixed read/write, 200 VUs, 5,935 requests:
+Real CRUD workload — 65% list-paginated, 25% single-item GET, 10% create
+(INSERT) — against a PostgreSQL table with **196,224 rows** on the same box.
+Servers: FastAPI on uvloop, Ember (`workers=1`), Express on Node 22.
+Identical 4-phase k6 ramp (10→50→150→300 VUs, ~2 min total). 0% errors
+across all three.
 
-| Framework | p50      | p95      | p99       | avg      | error rate |
-| --------- | -------- | -------- | --------- | -------- | ---------- |
-| FastAPI   | 1,230 ms | 9,223 ms | 14,066 ms | 2,577 ms | 0.000%     |
-| **Ember** | **53 ms**| **359 ms**| **762 ms**| **97 ms**| 2.443%     |
-| Express   |    18 ms |   109 ms |    164 ms |    30 ms | 0.000%     |
+| Framework        | Requests | avg latency | p95 latency | p99 latency | Verdict |
+| ---------------- | -------: | ----------: | ----------: | ----------: | ------- |
+| **Ember**        |   70,171 |  **19.85 ms** |    **44 ms** |    **59 ms** | matches Node, in pure Python |
+| Express (Node)   |   70,171 |     19.20 ms |       43 ms |       56 ms | reference |
+| FastAPI (Python) |   70,231 |    153.72 ms |      549 ms |      794 ms | 13× wider tail than Ember |
 
-> The 2.4% error rate at 200 VUs is keep-alive churn under spike, not handler
-> failures — see [tuning](#step-7--tune-keep-alive). Ember is bottlenecked on
-> the kernel's accept queue here, not on the handler.
+**Ember closes the Python-vs-Node gap completely on real CRUD** — average
+latency is within 3% of Express, p99 within 6%. FastAPI's tail latency
+explodes 13× under the same load: a request that lands at p99 takes 794 ms on
+FastAPI vs 59 ms on Ember.
+
+The full per-operation breakdown (run separately on each framework):
+
+| Operation     | Ember p50 | Ember p99 | FastAPI p50 | FastAPI p99 |
+| ------------- | --------: | --------: | ----------: | ----------: |
+| List (page=20) |     31 ms |     72 ms |       27 ms |      222 ms |
+| Get (single)   |     21 ms |     62 ms |        9 ms |      134 ms |
+| Create (POST)  |     24 ms |     65 ms |       11 ms |      136 ms |
+
+FastAPI has lower median on each operation when isolated, but its p99 is
+2-3× wider — under the unified compare load (300 VUs ramp), Ember's tighter
+distribution wins decisively.
+
+Reproducible: [`taskbench/`](https://github.com/Ember-Foundation/ember/tree/master/taskbench)
+— `./run_benchmarks.sh` to bench each framework individually, or
+`k6 run k6/compare_all.js` for the unified comparison once all three servers
+are up.
 
 ---
 

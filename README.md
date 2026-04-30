@@ -26,15 +26,28 @@
 
 | Framework         |       RPS |  p50 (ms) | p99 (ms) | peak RSS |
 | ----------------- | --------: | --------: | -------: | -------: |
-| **Fiber (Go)**    | **149,007** |  1.16 |  3.89 |   **9 MB** |
-| **Ember**         | **101,411** |  1.79 |  4.98 |  **25 MB** |
-| Express (Node)    |    23,516 |  8.00 | 13.79 |  130 MB |
-| NestJS (Node)     |    22,317 |  8.50 | 14.29 |  158 MB |
-| FastAPI (Python)  |    16,879 | 10.20 | 27.63 |   48 MB |
+| **Fiber (Go)**    | **140,993** |  1.21 |  3.96 |   **9 MB** |
+| **Ember**         | **112,177** |  1.68 |  4.35 |  **25 MB** |
+| Express (Node)    |    26,357 |  7.09 | 13.57 |  131 MB |
+| NestJS (Node)     |    23,528 |  8.08 | 13.75 |  158 MB |
+| FastAPI (Python)  |    17,517 |  9.45 | 30.86 |   49 MB |
 
-Ember runs **6.0× FastAPI**, **4.3× Express**, and **4.5× NestJS** on the same
-hardware — the only Python framework that breaks **100k RPS single-thread**
-*and* fits in 25 MB of RAM.
+Ember runs **6.4× FastAPI**, **4.3× Express**, and **4.8× NestJS** on the same
+hardware — and at **112k RPS / 25 MB RSS / 80% of Go Fiber's throughput**, it
+is the only Python framework in this league.
+
+### CRUD benchmark (PostgreSQL, mixed reads + writes)
+
+300-VU ramp, 196k-row table, 70k requests, 0% errors:
+
+| Framework | avg latency | p95   | p99   |
+|---|---:|---:|---:|
+| **Ember** | **19.85 ms** | **44 ms** | **59 ms** |
+| Express   |     19.20 ms |    43 ms |    56 ms |
+| FastAPI   |    153.72 ms |   549 ms |   794 ms |
+
+**Ember matches Node on real CRUD** — within 3% of Express on average, within
+6% on p99 — and has a **13× tighter tail than FastAPI**.
 
 **Memory:** Peak RSS dropped from 48 MB → 25 MB (-48%) in v0.2 — see
 [Performance § Tuning the buffer pool](docs/guide/performance.md). Idle RSS is

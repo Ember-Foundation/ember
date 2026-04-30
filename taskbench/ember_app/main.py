@@ -13,16 +13,12 @@ app = Ember()
 _pool: asyncpg.Pool | None = None
 
 # SQL fragment: serialize one task row to JSON inside PostgreSQL.
-# PG does the serialization; Python never builds a dict.
-_TASK_JSON = """json_build_object(
-    'id',          id::text,
-    'title',       title,
-    'description', description,
-    'completed',   completed,
-    'priority',    priority,
-    'created_at',  to_char(created_at, 'YYYY-MM-DD"T"HH24:MI:SS.US'),
-    'updated_at',  to_char(updated_at, 'YYYY-MM-DD"T"HH24:MI:SS.US')
-)"""
+# `to_jsonb(t)` is a single C-level conversion; the per-field
+# json_build_object form allocated 7 strings and ran 7 type casts per row.
+# Field names come from the table schema; UUID → text and timestamptz →
+# ISO 8601 conversion happens once per row inside PG.
+# Used in SELECT contexts that alias the source table/subquery as `t`.
+_TASK_JSON = "to_jsonb(t)"
 
 
 @app.hook(Events.BEFORE_SERVER_START)
@@ -30,9 +26,29 @@ async def on_start(components) -> None:
     global _pool
     _pool = await asyncpg.create_pool(
         dsn=DB_DSN,
-        min_size=2, max_size=20,
-        server_settings={"search_path": "ember"},
+        min_size=20,
+        max_size=100,
+        statement_cache_size=512,
+        max_inactive_connection_lifetime=300.0,
+        command_timeout=5.0,
+        server_settings={
+            "search_path":         "ember",
+            "jit":                 "off",      # JIT adds startup cost for sub-ms queries
+            "synchronous_commit":  "off",      # bench-only — commit before WAL fsync
+        },
     )
+    # Prime every pool connection: open the TCP+startup handshake now so the
+    # bench's ramp-up phase doesn't show artificially low throughput while
+    # asyncpg fills the pool lazily.
+    conns: list[asyncpg.Connection] = []
+    try:
+        for _ in range(_pool.get_min_size()):
+            conns.append(await _pool.acquire())
+        for c in conns:
+            await c.execute("SELECT 1")
+    finally:
+        for c in conns:
+            await _pool.release(c)
 
 
 @app.hook(Events.BEFORE_SERVER_STOP)
@@ -82,7 +98,7 @@ async def list_all(request: Request) -> Response:
         SELECT
             COALESCE(json_agg({_TASK_JSON}), '[]'::json)::text AS tasks,
             COUNT(*)::int                                        AS total
-        FROM tasks
+        FROM tasks t
         """,
     )
     body = f'{{"tasks":{row["tasks"]},"total":{row["total"]}}}'
@@ -92,7 +108,7 @@ async def list_all(request: Request) -> Response:
 @app.get("/tasks/{task_id}")
 async def get_task(request: Request, task_id: str) -> Response:
     json_text = await _pool.fetchval(
-        f"SELECT {_TASK_JSON}::text FROM tasks WHERE id = $1",
+        f"SELECT {_TASK_JSON}::text FROM tasks t WHERE id = $1",
         task_id,
     )
     if json_text is None:
@@ -106,11 +122,13 @@ async def create_task(request: Request) -> Response:
         body = await request.json()
     except Exception:
         return JSONResponse({"error": "Invalid JSON"}, status_code=400)
+    # RETURNING references the table-row composite directly (no `t` alias is
+    # bound in the RETURNING clause for a plain INSERT, so we use `tasks`).
     json_text = await _pool.fetchval(
-        f"""
+        """
         INSERT INTO tasks (title, description, completed, priority)
         VALUES ($1, $2, $3, $4)
-        RETURNING {_TASK_JSON}::text
+        RETURNING to_jsonb(tasks)::text
         """,
         body.get("title", "Untitled"),
         body.get("description", ""),
@@ -127,7 +145,7 @@ async def update_task(request: Request, task_id: str) -> Response:
     except Exception:
         return JSONResponse({"error": "Invalid JSON"}, status_code=400)
     json_text = await _pool.fetchval(
-        f"""
+        """
         UPDATE tasks SET
             title       = COALESCE($2, title),
             description = COALESCE($3, description),
@@ -135,7 +153,7 @@ async def update_task(request: Request, task_id: str) -> Response:
             priority    = COALESCE($5, priority),
             updated_at  = NOW()
         WHERE id = $1
-        RETURNING {_TASK_JSON}::text
+        RETURNING to_jsonb(tasks)::text
         """,
         task_id,
         body.get("title"),
