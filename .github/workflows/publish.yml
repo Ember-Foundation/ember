@@ -71,7 +71,7 @@ jobs:
       matrix:
         include:
           - arch: x86_64
-            runner: macos-13
+            runner: macos-14
           - arch: arm64
             runner: macos-14
     steps:
@@ -87,6 +87,8 @@ jobs:
           CIBW_ARCHS_MACOS: ${{ matrix.arch }}
           CIBW_ENVIRONMENT_MACOS: "CFLAGS='-O3' CXXFLAGS='-O3' MACOSX_DEPLOYMENT_TARGET=11.0"
           CIBW_TEST_COMMAND: 'python -c "import ember; print(ember.__version__)"'
+          # Cross-compiling x86_64 wheels on an arm64 host — can't import-test them
+          CIBW_TEST_SKIP: "*-macosx_x86_64"
 
       - uses: actions/upload-artifact@v4
         with:
