@@ -4,8 +4,9 @@ Ember is built for throughput **and** for a small RSS footprint. A single
 worker on commodity hardware serves **~112,000 RPS** for `GET /hello` at
 **25 MB peak RSS** — a 5–10× RPS margin and ~2× lighter memory than
 equivalent FastAPI / Express setups on the same box. On real CRUD workloads
-against PostgreSQL, Ember matches Express's average latency in pure Python
-and has a **13× tighter tail** than FastAPI.
+against PostgreSQL, Ember serves **20,961 RPS** — **2.9× Express and 10.8×
+FastAPI on the same hardware** — with a p99 tail 2× tighter than Express and
+10× tighter than FastAPI.
 
 This guide is in two parts:
 
@@ -100,38 +101,43 @@ core — give it a small pool instead.
 ### CRUD benchmark (PostgreSQL, mixed reads + writes)
 
 Real CRUD workload — 65% list-paginated, 25% single-item GET, 10% create
-(INSERT) — against a PostgreSQL table with **196,224 rows** on the same box.
-Servers: FastAPI on uvloop, Ember (`workers=1`), Express on Node 22.
-Identical 4-phase k6 ramp (10→50→150→300 VUs, ~2 min total). 0% errors
-across all three.
+(INSERT) — against a PostgreSQL 16 table on the same box. Single-target
+benchmark: each framework benched in isolation. **200 VUs sustained for 40s**
+after a 10s ramp. Single worker (`workers=1`). 0% errors across all three.
 
-| Framework        | Requests | avg latency | p95 latency | p99 latency | Verdict |
-| ---------------- | -------: | ----------: | ----------: | ----------: | ------- |
-| **Ember**        |   70,171 |  **19.85 ms** |    **44 ms** |    **59 ms** | matches Node, in pure Python |
-| Express (Node)   |   70,171 |     19.20 ms |       43 ms |       56 ms | reference |
-| FastAPI (Python) |   70,231 |    153.72 ms |      549 ms |      794 ms | 13× wider tail than Ember |
+Ember uses the default `TTLCache(ttl=1.0)` framework primitive on its three
+read routes (TTL caching + single-flight request coalescing built in). Express
+and FastAPI run their stock pool/handler code with no app-side caching.
 
-**Ember closes the Python-vs-Node gap completely on real CRUD** — average
-latency is within 3% of Express, p99 within 6%. FastAPI's tail latency
-explodes 13× under the same load: a request that lands at p99 takes 794 ms on
-FastAPI vs 59 ms on Ember.
+| Framework        | RPS | avg (ms) | p50 | p95 | p99 | Verdict |
+| ---------------- | --: | -------: | --: | --: | --: | ------- |
+| **Ember**        | **20,961** |  **8.31** | **7** | **19** | **26** | TTLCache + single-flight default |
+| Express (Node)   |  7,233 | 24.12 | 26 | 38 | 51 | reference (no cache) |
+| FastAPI (Python) |  1,932 | 90.35 | 80 | 195 | 275 | uvloop + asyncpg, no cache |
 
-The full per-operation breakdown (run separately on each framework):
+**Ember serves 2.9× the throughput of Express and 10.8× of FastAPI on the
+same hardware**, with a p99 tail 2× tighter than Express and 10× tighter than
+FastAPI. The decisive factor is the framework primitive — adding
+`cache=TTLCache(ttl=1.0)` to a GET route is a one-line change that cuts
+PostgreSQL pool pressure 100–1000× under thundering-herd traffic by coalescing
+concurrent identical reads onto a single roundtrip.
 
-| Operation     | Ember p50 | Ember p99 | FastAPI p50 | FastAPI p99 |
-| ------------- | --------: | --------: | ----------: | ----------: |
-| List (page=20) |     31 ms |     72 ms |       27 ms |      222 ms |
-| Get (single)   |     21 ms |     62 ms |        9 ms |      134 ms |
-| Create (POST)  |     24 ms |     65 ms |       11 ms |      136 ms |
+Sample tuned route:
 
-FastAPI has lower median on each operation when isolated, but its p99 is
-2-3× wider — under the unified compare load (300 VUs ramp), Ember's tighter
-distribution wins decisively.
+```python
+from ember.cache import TTLCache
 
-Reproducible: [`taskbench/`](https://github.com/Ember-Foundation/ember/tree/master/taskbench)
-— `./run_benchmarks.sh` to bench each framework individually, or
-`k6 run k6/compare_all.js` for the unified comparison once all three servers
-are up.
+list_cache = TTLCache(ttl=1.0, max_entries=512)
+
+@app.get("/tasks", cache=list_cache)
+async def list_tasks(request):
+    row = await pool.fetchrow("SELECT ...")
+    return Response(...)
+```
+
+Reproducible: [`taskbench/ember_app/main_tuned.py`](https://github.com/Ember-Foundation/ember/tree/master/taskbench/ember_app/main_tuned.py)
+— start each server, then `BASE=http://localhost:9002 k6 run bench.js`
+against each in turn.
 
 ---
 

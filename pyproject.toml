@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "ember-api"
 version = "0.1.0"
-description = "AI-API-first async HTTP framework with Cython hot paths"
+description = "The fastest Python web framework — Cython hot paths, io_uring, multi-process workers, built-in TTL + single-flight caching"
 readme = "README.md"
 requires-python = ">=3.12"
 license = { text = "MIT" }

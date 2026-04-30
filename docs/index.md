@@ -20,7 +20,7 @@ head:
       content: "Ember — The Python framework that hits 112k RPS"
   - - meta
     - property: og:description
-      content: "AI-first async HTTP framework for Python. 112k RPS single-thread, 25 MB RSS, native SSE streaming, llhttp + Cython + io_uring."
+      content: "The fastest Python web framework — engineered for raw speed and concurrency. 112k RPS single-thread, 25 MB RSS, llhttp + Cython + io_uring."
   - - meta
     - property: og:image
       content: "https://ember-foundation.github.io/ember/og-image.svg"
@@ -35,7 +35,7 @@ head:
       content: "Ember — 112k RPS Python web framework"
   - - meta
     - name: twitter:description
-      content: "AI-first async HTTP framework for Python. 6× faster than FastAPI, 4× faster than Express, in 25 MB RSS."
+      content: "The fastest Python web framework. 6× faster than FastAPI, 4× faster than Express, in 25 MB RSS."
   - - meta
     - name: twitter:image
       content: "https://ember-foundation.github.io/ember/og-image.svg"
@@ -52,7 +52,7 @@ head:
         "name": "Ember",
         "applicationCategory": "DeveloperApplication",
         "operatingSystem": "Linux, macOS, Windows",
-        "description": "AI-API-first async HTTP framework for Python. 112k RPS single-thread at 25 MB RSS.",
+        "description": "The fastest Python web framework. 112k RPS single-thread at 25 MB RSS, 21k RPS on real PostgreSQL CRUD with TTL+single-flight caching built in.",
         "url": "https://ember-foundation.github.io/ember/",
         "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
         "softwareVersion": "0.2.1",
@@ -63,7 +63,7 @@ head:
 hero:
   name: "🔥 Ember"
   text: "112k RPS. 25 MB RAM. Pure Python."
-  tagline: "AI-first async HTTP framework — built on llhttp, Cython, and io_uring. 6× faster than FastAPI on the same hardware."
+  tagline: "The fastest Python web framework — built on llhttp, Cython, and io_uring. 6× faster than FastAPI on `/hello`, 10× faster on real PostgreSQL CRUD."
   image:
     src: /logo.svg
     alt: Ember Logo

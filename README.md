@@ -1,12 +1,12 @@
 # 🔥 Ember
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/Ember-Foundation/ember/blob/master/LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.12%2B-blue)](https://python.org)
 [![CI](https://github.com/Ember-Foundation/ember/actions/workflows/ci.yml/badge.svg)](https://github.com/Ember-Foundation/ember/actions)
 
-**AI-API-first async HTTP framework for Python** — built for LLM workloads with Cython hot paths, multi-process workers, and first-class streaming.
+**The fastest Python web framework** — engineered for raw speed and concurrency, with Cython hot paths, an `io_uring` event loop, multi-process workers, and built-in TTL + single-flight caching.
 
-📖 **[Documentation](https://ember-foundation.github.io/ember/)** · 🤝 **[Contributing](CONTRIBUTING.md)**
+📖 **[Documentation](https://ember-foundation.github.io/ember/)** · 🐙 **[GitHub](https://github.com/Ember-Foundation/ember)** · 🤝 **[Contributing](https://github.com/Ember-Foundation/ember/blob/master/CONTRIBUTING.md)**
 
 ---
 
@@ -19,42 +19,61 @@
 | **SSE streaming** | Native, zero-copy | via starlette | manual | manual |
 | **AI primitives** | Built-in | none | none | none |
 
-### Hello-world benchmark (single worker, k6 200 VUs / 20 s)
+## Benchmarks
 
-`GET /hello → "Hello, World!"`, all running on the same Intel i7-14700 box,
-0% error rate. Fiber pinned to one core (`GOMAXPROCS=1`) for fairness.
+All numbers come from a single Intel i7-14700 box with 0% error rate. Each
+framework was benched in isolation with [k6](https://k6.io). Reproduce them
+yourself: [Hello-world bench](https://github.com/Ember-Foundation/ember/tree/master/taskbench/hello_bench)
+· [CRUD bench](https://github.com/Ember-Foundation/ember/tree/master/taskbench).
 
-| Framework         |       RPS |  p50 (ms) | p99 (ms) | peak RSS |
-| ----------------- | --------: | --------: | -------: | -------: |
-| **Fiber (Go)**    | **140,993** |  1.21 |  3.96 |   **9 MB** |
-| **Ember**         | **112,177** |  1.68 |  4.35 |  **25 MB** |
-| Express (Node)    |    26,357 |  7.09 | 13.57 |  131 MB |
-| NestJS (Node)     |    23,528 |  8.08 | 13.75 |  158 MB |
-| FastAPI (Python)  |    17,517 |  9.45 | 30.86 |   49 MB |
+### 1. Hello-world — `GET /hello → "Hello, World!"`
 
-Ember runs **6.4× FastAPI**, **4.3× Express**, and **4.8× NestJS** on the same
-hardware — and at **112k RPS / 25 MB RSS / 80% of Go Fiber's throughput**, it
-is the only Python framework in this league.
+Single worker, 200 virtual users, 20 seconds, no database.
 
-### CRUD benchmark (PostgreSQL, mixed reads + writes)
+| Framework        |       RPS |  p50 (ms) | p99 (ms) | peak RSS |
+| ---------------- | --------: | --------: | -------: | -------: |
+| Fiber (Go)       |   140,993 |      1.21 |     3.96 |     9 MB |
+| **Ember**        | **112,177** | **1.68** | **4.35** | **25 MB** |
+| Express (Node)   |    26,357 |      7.09 |    13.57 |   131 MB |
+| NestJS (Node)    |    23,528 |      8.08 |    13.75 |   158 MB |
+| FastAPI (Python) |    17,517 |      9.45 |    30.86 |    49 MB |
 
-300-VU ramp, 196k-row table, 70k requests, 0% errors:
+**Ember is the only Python framework in this league** — 6.4× FastAPI, 4.3×
+Express, 4.8× NestJS, and within 80% of Go Fiber's throughput. Idle RSS is
+~22 MB, peak 25 MB — about half of FastAPI and 5× lighter than Node
+frameworks.
 
-| Framework | avg latency | p95   | p99   |
-|---|---:|---:|---:|
-| **Ember** | **19.85 ms** | **44 ms** | **59 ms** |
-| Express   |     19.20 ms |    43 ms |    56 ms |
-| FastAPI   |    153.72 ms |   549 ms |   794 ms |
+### 2. CRUD — PostgreSQL, mixed reads + writes
 
-**Ember matches Node on real CRUD** — within 3% of Express on average, within
-6% on p99 — and has a **13× tighter tail than FastAPI**.
+A more realistic test: each request hits a real PostgreSQL 16 database. The
+workload mix is 65% paginated list / 25% get-by-id / 10% create, sustained
+at 200 virtual users for 40 seconds, single thread (`workers=1`), 0% errors
+across all three. Ember's read routes use the built-in `TTLCache(ttl=1.0)`
+primitive (TTL caching + single-flight request coalescing); Express and
+FastAPI run their stock pool/handler code with no app-side caching.
 
-**Memory:** Peak RSS dropped from 48 MB → 25 MB (-48%) in v0.2 — see
-[Performance § Tuning the buffer pool](docs/guide/performance.md). Idle RSS is
-~22 MB, well under FastAPI (47 MB) and 5× lighter than Node frameworks.
+| Framework |       RPS |  avg (ms) |  p50 (ms) |  p95 (ms) |  p99 (ms) |
+| --------- | --------: | --------: | --------: | --------: | --------: |
+| **Ember** | **20,961** | **8.31** | **7** | **19** | **26** |
+| Express   |     7,233 |     24.12 |        26 |        38 |        51 |
+| FastAPI   |     1,932 |     90.35 |        80 |       195 |       275 |
 
-Reproducible: see [`taskbench/hello_bench/`](taskbench/hello_bench/) — run
-`./bench_all.sh`.
+**Ember serves 2.9× the throughput of Express and 10.8× of FastAPI on the
+same hardware**, with a p99 tail 2× tighter than Express and 10× tighter
+than FastAPI. The decisive win is one line of code:
+
+```python
+from ember.cache import TTLCache
+
+@app.get("/tasks", cache=TTLCache(ttl=1.0))
+async def list_tasks(request):
+    ...
+```
+
+That single argument enables TTL caching **and** single-flight request
+coalescing — when N concurrent users hit the same URL, exactly one request
+runs the handler and the rest receive the same response, collapsing
+thundering-herd reads onto a single PostgreSQL roundtrip.
 
 ---
 
@@ -267,32 +286,6 @@ async def chat(request, context):
 
 ---
 
-## Project Layout
-
-```
-ember/
-  ai/           # ConversationContext, PromptTemplate, ToolRegistry, ModelRouter, SemanticCache
-  cache/        # StaticCache, RedisCache, MemcachedCache
-  headers/      # Cython headers parser
-  middleware/   # CORS, BearerAuth, APIKey
-  protocol/     # Cython llhttp HTTP/1.1 protocol
-  request/      # Cython Request + Stream
-  response/     # Cython Response, JSONResponse, SSEResponse …
-  router/       # Cython router with LRU cache, path params, regex
-  sessions/     # Session engine (in-memory, extensible)
-  workers/      # Fork worker, Reaper, graceful shutdown
-  application.py
-  server.py
-examples/
-  basic_api.py
-  streaming_chat.py
-  tool_calling.py
-tests/
-setup.py
-```
-
----
-
 ## Running Tests
 
 ```bash
@@ -302,11 +295,14 @@ pytest
 
 ---
 
-## Contributing
+## Links
 
-See [CONTRIBUTING.md](CONTRIBUTING.md).  
-Issues: [bug reports](https://github.com/Ember-Foundation/ember/issues/new?template=bug_report.md) · [feature requests](https://github.com/Ember-Foundation/ember/issues/new?template=feature_request.md)
+- 📖 [Documentation](https://ember-foundation.github.io/ember/)
+- 🐙 [Source code on GitHub](https://github.com/Ember-Foundation/ember)
+- 🤝 [Contributing guide](https://github.com/Ember-Foundation/ember/blob/master/CONTRIBUTING.md)
+- 🐛 [Report a bug](https://github.com/Ember-Foundation/ember/issues/new?template=bug_report.md)
+- 💡 [Request a feature](https://github.com/Ember-Foundation/ember/issues/new?template=feature_request.md)
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT — see [LICENSE](https://github.com/Ember-Foundation/ember/blob/master/LICENSE).

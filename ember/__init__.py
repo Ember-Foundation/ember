@@ -1,14 +1,13 @@
 """
-Ember — AI-API-first async HTTP framework.
+Ember — the fastest Python web framework.
 
-Inspired by Vibora. Built for LLM workloads:
-  - First-class SSE streaming for token output
+Engineered for raw speed and concurrency:
+  - llhttp + Cython hot-path compilation
+  - io_uring event loop (epoll/kqueue fallback)
+  - Multi-process SO_REUSEPORT workers, fork-based supervision
+  - TTL + single-flight cache primitives built into the router
   - Native async with uvloop
-  - Cython hot-path compilation
-  - Multi-process SO_REUSEPORT workers + thread pool for CPU inference
-  - Token-aware rate limiting
-  - Conversation context management
-  - Prompt templates, tool calling, model routing, semantic cache
+  - First-class SSE streaming, AI primitives, conversation context, model routing
 """
 import importlib as _importlib
 

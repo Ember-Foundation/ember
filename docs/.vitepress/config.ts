@@ -74,7 +74,7 @@ export default defineConfig({
 
   themeConfig: {
     logo: { src: '/logo.svg', alt: 'Ember' },
-    siteTitle: '🔥 Ember',
+    siteTitle: 'Ember',
 
     nav: [
       { text: 'Guide', link: '/guide/getting-started', activeMatch: '/guide/' },
