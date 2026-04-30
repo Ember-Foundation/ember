@@ -36,6 +36,8 @@ class RequestHandler(Process):
         thread_pool_workers: int | None = None,
         keep_alive_timeout: int = 30,
         debug: bool = False,
+        io_uring_num_bufs: int = 256,
+        io_uring_buf_size: int = 8192,
     ) -> None:
         super().__init__()
         self.app = app
@@ -45,11 +47,19 @@ class RequestHandler(Process):
         self.thread_pool_workers = thread_pool_workers or min(32, (os.cpu_count() or 4) + 4)
         self.keep_alive_timeout = keep_alive_timeout
         self.debug = debug
+        self.io_uring_num_bufs = io_uring_num_bufs
+        self.io_uring_buf_size = io_uring_buf_size
         self.daemon = True
 
     def run(self) -> None:
         try:
-            from ember.eventloop import new_event_loop
+            from ember.eventloop import install_best_event_loop, new_event_loop
+            # Re-install the policy in the forked worker so each worker gets
+            # its own io_uring ring + buffer pool sized as the user requested.
+            install_best_event_loop(
+                num_bufs=self.io_uring_num_bufs,
+                buf_size=self.io_uring_buf_size,
+            )
             loop = new_event_loop()
         except Exception:
             loop = asyncio.new_event_loop()
@@ -74,6 +84,7 @@ class RequestHandler(Process):
         executor.shutdown(wait=True)
 
     async def _serve(self, loop: asyncio.AbstractEventLoop, shutdown: asyncio.Event) -> None:
+        import gc
         from ..protocol import Connection
         from ..constants import Events
         from .reaper import Reaper
@@ -82,6 +93,12 @@ class RequestHandler(Process):
 
         await self.app.initialize()
         await self.app.call_hooks_by_event(Events.BEFORE_SERVER_START, self.app.components)
+
+        # Move every long-lived startup object out of the GC scan set so
+        # gen-2 collections don't traverse them on every request. The router,
+        # route table, and component graph never become unreachable.
+        gc.collect()
+        gc.freeze()
 
         def protocol_factory():
             conn = Connection(self.app)

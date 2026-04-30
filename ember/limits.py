@@ -9,7 +9,7 @@ class ServerLimits:
         worker_timeout: int = 60,
         keep_alive_timeout: int = 30,
         max_headers_size: int = 16 * 1024,
-        write_buffer: int = 419_430,
+        write_buffer: int = 65_536,
     ) -> None:
         self.worker_timeout = worker_timeout
         self.keep_alive_timeout = keep_alive_timeout

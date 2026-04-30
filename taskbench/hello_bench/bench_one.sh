@@ -57,8 +57,9 @@ IDLE_RSS_KB=$(get_rss_kb)
 ( while true; do echo "$(get_cpu_pct) $(get_rss_kb)" >> "$SAMPLES"; sleep 1; done ) &
 SAMPLER_PID=$!
 
-# Run k6
-URL="http://localhost:${PORT}/hello" k6 run --quiet \
+# Run k6 — optionally pinned to specific cores via $K6_TASKSET
+# (e.g. K6_TASKSET="taskset -c 4-27"). Empty by default → no pinning.
+URL="http://localhost:${PORT}/hello" ${K6_TASKSET:-} k6 run --quiet \
   --summary-trend-stats="avg,min,med,p(50),p(90),p(95),p(99),max" \
   "$DIR/k6_hello.js" > "$K6_OUT" 2>&1
 K6_RC=$?

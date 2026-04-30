@@ -22,6 +22,7 @@ cdef class Route:
     cdef bint _is_async
     cdef bint _wants_request
     cdef bint _simple_call
+    cdef public bint _trivial_path  # safe to bypass _handle_request coroutine entirely
 
 cdef class AIRoute(Route):
     cdef public str model

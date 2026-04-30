@@ -75,10 +75,15 @@ DEF RING_DEPTH   = 4096
 DEF BATCH_SIZE   = 64
 DEF _EVENT_READ  = 1
 DEF _EVENT_WRITE = 2
-DEF NUM_BUFS      = 1024
-DEF BUF_SIZE      = 32768   # unsigned short max = 65535; 32768 is safe
-DEF BUF_GROUP     = 1
-DEF BUF_RING_MASK = NUM_BUFS - 1   # compile-time constant; avoids io_uring_buf_ring_mask() call
+DEF BUF_GROUP    = 1
+
+# Default buffer-pool sizes. Override via UringSelector(num_bufs=, buf_size=)
+# or Ember.run(io_uring_num_bufs=, io_uring_buf_size=). Lower values trade
+# peak throughput at high concurrency for lower idle RSS:
+#   256 ×  8 KB =  2 MB   (default — covers ~256 concurrent in-flight recvs)
+#  1024 × 32 KB = 32 MB   (legacy — for very high concurrency / large reads)
+DEFAULT_NUM_BUFS = 256
+DEFAULT_BUF_SIZE = 8192     # must be ≤ 65535 (io_uring_buf_ring_add len is unsigned short)
 
 # user_data encoding: bits 32+ clear = POLL (fd in bits 0–31)
 #                     bit 32 set only = RECV (transport_id in bits 0–31)
@@ -93,7 +98,17 @@ logger = logging.getLogger("ember.eventloop.uring")
 
 cdef class UringSelector:
 
-    def __init__(self, unsigned int queue_depth=RING_DEPTH):
+    def __init__(self, unsigned int queue_depth=RING_DEPTH,
+                 unsigned int num_bufs=256, unsigned int buf_size=8192):
+        # num_bufs must be a power of two so (num_bufs - 1) is a valid ring mask.
+        if num_bufs == 0 or (num_bufs & (num_bufs - 1)) != 0:
+            raise ValueError(
+                f"num_bufs must be a power of two > 0, got {num_bufs}")
+        # buf_size is passed to io_uring_buf_ring_add as unsigned short (len).
+        if buf_size == 0 or buf_size > 65535:
+            raise ValueError(
+                f"buf_size must be in (0, 65535], got {buf_size}")
+
         self._fd_to_key         = {}
         self._map               = _SelectorMappingProxy(self._fd_to_key)
         self._multishot_fds     = set()
@@ -103,6 +118,9 @@ cdef class UringSelector:
         self._next_transport_id = 0
         self._buf_pool          = NULL
         self._buf_ring          = NULL
+        self._num_bufs          = num_bufs
+        self._buf_size          = buf_size
+        self._buf_ring_mask     = num_bufs - 1
 
         cdef unsigned int flags = (IORING_SETUP_SINGLE_ISSUER |
                                    IORING_SETUP_COOP_TASKRUN  |
@@ -117,7 +135,7 @@ cdef class UringSelector:
                 f"Requires Linux 5.1+, /proc/sys/kernel/io_uring_disabled=0")
         self._ring_open = True
 
-        self._buf_pool = <char*>malloc(NUM_BUFS * BUF_SIZE)
+        self._buf_pool = <char*>malloc(<size_t>self._num_bufs * <size_t>self._buf_size)
         if self._buf_pool == NULL:
             io_uring_queue_exit(&self._ring)
             self._ring_open = False
@@ -125,7 +143,7 @@ cdef class UringSelector:
 
         cdef int buf_ret = 0
         self._buf_ring = io_uring_setup_buf_ring(
-            &self._ring, NUM_BUFS, BUF_GROUP, 0, &buf_ret)
+            &self._ring, self._num_bufs, BUF_GROUP, 0, &buf_ret)
         if self._buf_ring == NULL:
             free(self._buf_pool);  self._buf_pool = NULL
             io_uring_queue_exit(&self._ring);  self._ring_open = False
@@ -133,13 +151,13 @@ cdef class UringSelector:
                 f"io_uring_setup_buf_ring failed errno={-buf_ret}")
 
         # Populate all buffers into the ring in one batch
-        cdef int mask = BUF_RING_MASK
-        cdef int i
-        for i in range(NUM_BUFS):
+        cdef int mask = <int>self._buf_ring_mask
+        cdef unsigned int i
+        for i in range(self._num_bufs):
             io_uring_buf_ring_add(
-                self._buf_ring, self._buf_pool + i * BUF_SIZE,
-                BUF_SIZE, i, mask, i)
-        io_uring_buf_ring_advance(self._buf_ring, NUM_BUFS)
+                self._buf_ring, self._buf_pool + i * self._buf_size,
+                <unsigned short>self._buf_size, <unsigned short>i, mask, <int>i)
+        io_uring_buf_ring_advance(self._buf_ring, <int>self._num_bufs)
 
     # ── Selector interface ────────────────────────────────────────────────────
 
@@ -240,7 +258,7 @@ cdef class UringSelector:
         self._multishot_fds.clear()
         self._transports.clear()
         if self._buf_ring != NULL and self._ring_open:
-            io_uring_free_buf_ring(&self._ring, self._buf_ring, NUM_BUFS, BUF_GROUP)
+            io_uring_free_buf_ring(&self._ring, self._buf_ring, self._num_bufs, BUF_GROUP)
             self._buf_ring = NULL
         if self._buf_pool != NULL:
             free(self._buf_pool)
@@ -321,8 +339,9 @@ cdef class UringSelector:
     cdef void _return_buffer(self, int buf_id):
         # Pure memory write — no SQE, no syscall.
         io_uring_buf_ring_add(
-            self._buf_ring, self._buf_pool + buf_id * BUF_SIZE,
-            BUF_SIZE, buf_id, BUF_RING_MASK, 0)
+            self._buf_ring, self._buf_pool + buf_id * <int>self._buf_size,
+            <unsigned short>self._buf_size, <unsigned short>buf_id,
+            <int>self._buf_ring_mask, 0)
         io_uring_buf_ring_advance(self._buf_ring, 1)
 
     cdef void _drain_batch(self, io_uring_cqe** cqes, int count, list ready):
@@ -356,7 +375,7 @@ cdef class UringSelector:
                             self._submit_recv(t)
                     elif cqe_flags & IORING_CQE_F_BUFFER:
                         buf_id = <int>(cqe_flags >> 16)
-                        t._on_recv(res, buf_id, self._buf_pool + buf_id * BUF_SIZE)
+                        t._on_recv(res, buf_id, self._buf_pool + buf_id * <int>self._buf_size)
                         if not t._recv_armed and not t._closing and not t._paused:
                             self._submit_recv(t)
                     else:
@@ -639,8 +658,9 @@ cdef class UringTransport:
 class UringEventLoop(asyncio.SelectorEventLoop):
     """asyncio event loop backed by io_uring POLL + multishot RECV/SEND."""
 
-    def __init__(self):
-        super().__init__(selector=UringSelector(queue_depth=RING_DEPTH))
+    def __init__(self, num_bufs=DEFAULT_NUM_BUFS, buf_size=DEFAULT_BUF_SIZE):
+        super().__init__(selector=UringSelector(
+            queue_depth=RING_DEPTH, num_bufs=num_bufs, buf_size=buf_size))
         self.set_task_factory(asyncio.eager_task_factory)
 
     def _make_socket_transport(self, sock, protocol, waiter=None,
@@ -649,5 +669,10 @@ class UringEventLoop(asyncio.SelectorEventLoop):
 
 
 class UringEventLoopPolicy(asyncio.DefaultEventLoopPolicy):
+    def __init__(self, num_bufs=DEFAULT_NUM_BUFS, buf_size=DEFAULT_BUF_SIZE):
+        super().__init__()
+        self._num_bufs = num_bufs
+        self._buf_size = buf_size
+
     def new_event_loop(self):
-        return UringEventLoop()
+        return UringEventLoop(num_bufs=self._num_bufs, buf_size=self._buf_size)

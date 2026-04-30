@@ -177,7 +177,7 @@ class Connection(asyncio.Protocol):
     def connection_made(self, transport) -> None:
         self.transport = transport
         limits = getattr(self.app, "_server_limits", None)
-        buf = limits.write_buffer if limits else 419_430
+        buf = limits.write_buffer if limits else 65_536
         transport.set_write_buffer_limits(high=buf)
 
     def data_received(self, data: bytes) -> None:
@@ -244,6 +244,36 @@ class Connection(asyncio.Protocol):
             return   # 404/405 already sent in on_headers_complete
         self.status = PROCESSING
         _route = self._current_route   # capture before eager task may reset _current_route
+
+        # ── Trivial fast path ──────────────────────────────────────────────
+        # Handler is async-decorated but provably can't suspend (bytecode has
+        # no GET_AWAITABLE/YIELD/SEND), no per-route cache/limits, no global
+        # before/after-endpoint hooks. Drive the coroutine directly with
+        # send(None) — saves one Task object and one coroutine wrapper per
+        # request vs going through _handle_request.
+        if (_route._trivial_path
+                and not self.app._has_before_endpoint
+                and not self.app._has_after_endpoint):
+            self._timeout_task = None
+            try:
+                coro = _route.handler(request=self._current_request)
+                try:
+                    coro.send(None)
+                except StopIteration as _stop:
+                    response = _stop.value
+                    if response is not None:
+                        response.send(self)
+                    return
+                # Defensive: handler unexpectedly suspended despite bytecode
+                # check (e.g. monkey-patched at runtime). Close the partial
+                # coroutine and fall through to the slow path with a fresh one.
+                coro.close()
+            except Exception as exc:
+                self._current_task = self._loop.create_task(
+                    self._handle_exception(exc, self._current_request))
+                return
+
+        # ── Full path ──────────────────────────────────────────────────────
         self._current_task = self._loop.create_task(
             self._handle_request(self._current_request, _route)
         )

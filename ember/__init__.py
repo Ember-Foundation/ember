@@ -10,6 +10,8 @@ Inspired by Vibora. Built for LLM workloads:
   - Conversation context management
   - Prompt templates, tool calling, model routing, semantic cache
 """
+import importlib as _importlib
+
 try:
     from .eventloop import install_best_event_loop
     install_best_event_loop()
@@ -20,6 +22,7 @@ except Exception:
     except ImportError:
         pass
 
+# ── Eager core: needed by every Ember app ─────────────────────────────────────
 from .__version__ import __version__
 from .server import Ember
 from .application import Blueprint
@@ -42,27 +45,54 @@ from .exceptions import (
     TokenLimitExceeded,
     ModelUnavailable,
 )
-from .ai import (
-    ConversationContext,
-    Message,
-    MessageRole,
-    PromptTemplate,
-    TemplateVar,
-    ToolRegistry,
-    ToolResult,
-    tool,
-    ModelRouter,
-    ModelSpec,
-    RoutingStrategy,
-    SemanticCache,
-    SSEWriter,
-    sse_stream,
-    TokenBucket,
-    GlobalTokenBucket,
-    RateLimitMiddleware,
-)
-from .middleware import CORSMiddleware, BearerAuthMiddleware, APIKeyMiddleware
-from .cache import StaticCache, RedisCache, MemcachedCache
+
+# ── Lazy: optional namespaces (AI / middleware / cache) ───────────────────────
+# Imported on first attribute access via PEP 562 __getattr__. This avoids
+# pulling in numpy / redis / memcached clients for HTTP-only apps and trims
+# ~2–4 MB off cold-start RSS.
+_LAZY: dict[str, str] = {
+    # ember.ai
+    "ConversationContext": ".ai",
+    "Message":             ".ai",
+    "MessageRole":         ".ai",
+    "PromptTemplate":      ".ai",
+    "TemplateVar":         ".ai",
+    "ToolRegistry":        ".ai",
+    "ToolResult":          ".ai",
+    "tool":                ".ai",
+    "ModelRouter":         ".ai",
+    "ModelSpec":           ".ai",
+    "RoutingStrategy":     ".ai",
+    "SemanticCache":       ".ai",
+    "SSEWriter":           ".ai",
+    "sse_stream":          ".ai",
+    "TokenBucket":         ".ai",
+    "GlobalTokenBucket":   ".ai",
+    "RateLimitMiddleware": ".ai",
+    # ember.middleware
+    "CORSMiddleware":        ".middleware",
+    "BearerAuthMiddleware":  ".middleware",
+    "APIKeyMiddleware":      ".middleware",
+    # ember.cache
+    "StaticCache":    ".cache",
+    "RedisCache":     ".cache",
+    "MemcachedCache": ".cache",
+}
+
+
+def __getattr__(name: str):
+    mod_path = _LAZY.get(name)
+    if mod_path is None:
+        raise AttributeError(f"module 'ember' has no attribute {name!r}")
+    mod = _importlib.import_module(mod_path, __name__)
+    val = getattr(mod, name)
+    globals()[name] = val   # cache for next access
+    return val
+
+
+def __dir__() -> list[str]:
+    return sorted(set(globals()) | set(_LAZY))
+
 
 __all__ = [
     "__version__",
@@ -85,7 +115,7 @@ __all__ = [
     "RateLimitExceeded",
     "TokenLimitExceeded",
     "ModelUnavailable",
-    # AI
+    # AI (lazy)
     "ConversationContext",
     "Message",
     "MessageRole",
@@ -103,11 +133,11 @@ __all__ = [
     "TokenBucket",
     "GlobalTokenBucket",
     "RateLimitMiddleware",
-    # Middleware
+    # Middleware (lazy)
     "CORSMiddleware",
     "BearerAuthMiddleware",
     "APIKeyMiddleware",
-    # Cache
+    # Cache (lazy)
     "StaticCache",
     "RedisCache",
     "MemcachedCache",

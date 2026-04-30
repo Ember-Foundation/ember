@@ -24,8 +24,11 @@ cdef class UringSelector:
     cdef object             _map
     cdef dict               _transports
     cdef uint64_t           _next_transport_id
-    cdef char*              _buf_pool          # flat slab: NUM_BUFS × BUF_SIZE bytes
+    cdef char*              _buf_pool          # flat slab: _num_bufs × _buf_size bytes
     cdef io_uring_buf_ring* _buf_ring          # shared-memory ring; return = memory write
+    cdef readonly unsigned int _num_bufs       # buffer count (power of two)
+    cdef readonly unsigned int _buf_size       # per-buffer size in bytes (≤ 65535)
+    cdef unsigned int          _buf_ring_mask  # _num_bufs - 1
 
     cdef void      _arm_multishot(self, int fd, int mask)
     cdef void      _cancel_poll(self, int fd)

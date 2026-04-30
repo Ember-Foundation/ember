@@ -126,7 +126,7 @@ class Connection(asyncio.Protocol):
         self.transport = transport
         transport.set_write_buffer_limits(
             high=getattr(self.app, "_server_limits", None) and
-                 self.app._server_limits.write_buffer or 419_430
+                 self.app._server_limits.write_buffer or 65_536
         )
 
     def data_received(self, data: bytes) -> None:

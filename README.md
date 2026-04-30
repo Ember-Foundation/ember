@@ -26,14 +26,19 @@
 
 | Framework         |       RPS |  p50 (ms) | p99 (ms) | peak RSS |
 | ----------------- | --------: | --------: | -------: | -------: |
-| **Fiber (Go)**    | **120,912** |  1.43 |  4.54 |    9 MB |
-| **Ember**         |  **91,156** |  1.99 |  5.95 |   48 MB |
-| Express (Node)    |    22,695 |  8.08 | 17.32 |  130 MB |
-| NestJS (Node)     |    20,091 |  9.39 | 17.51 |  157 MB |
-| FastAPI (Python)  |    15,697 | 11.24 | 26.17 |   49 MB |
+| **Fiber (Go)**    | **149,007** |  1.16 |  3.89 |   **9 MB** |
+| **Ember**         | **101,411** |  1.79 |  4.98 |  **25 MB** |
+| Express (Node)    |    23,516 |  8.00 | 13.79 |  130 MB |
+| NestJS (Node)     |    22,317 |  8.50 | 14.29 |  158 MB |
+| FastAPI (Python)  |    16,879 | 10.20 | 27.63 |   48 MB |
 
-Ember reaches **75% of Fiber's throughput in pure Python**, while running
-**5.8× FastAPI**, **4.0× Express**, and **4.5× NestJS** on identical hardware.
+Ember runs **6.0× FastAPI**, **4.3× Express**, and **4.5× NestJS** on the same
+hardware — the only Python framework that breaks **100k RPS single-thread**
+*and* fits in 25 MB of RAM.
+
+**Memory:** Peak RSS dropped from 48 MB → 25 MB (-48%) in v0.2 — see
+[Performance § Tuning the buffer pool](docs/guide/performance.md). Idle RSS is
+~22 MB, well under FastAPI (47 MB) and 5× lighter than Node frameworks.
 
 Reproducible: see [`taskbench/hello_bench/`](taskbench/hello_bench/) — run
 `./bench_all.sh`.
@@ -44,6 +49,9 @@ Reproducible: see [`taskbench/hello_bench/`](taskbench/hello_bench/) — run
 
 - **Cython hot paths** — headers, router, request, response, protocol all compiled to C
 - **Multi-process workers** — fork-based with `SO_REUSEPORT`, kernel load-balancing
+- **`workers=1` in-process** — no supervisor overhead when you don't need it (~22 MB saved)
+- **Tunable io_uring buffer pool** — `Ember.run(io_uring_num_bufs=, io_uring_buf_size=)` to scale RAM down to **2 MB pool** (default) or up to 32 MB for high-concurrency workloads
+- **Lazy AI / cache / middleware imports** — `import ember` no longer pulls numpy/redis/memcached for plain HTTP apps
 - **AI-first routing** — `@app.ai_route()` with streaming, tool calling, conversation context
 - **SSE streaming** — `SSEResponse`, `sse_stream()`, `TokenStreamResponse` for LLM token output
 - **Pluggable caching** — `StaticCache`, `RedisCache`, `MemcachedCache` via single decorator arg

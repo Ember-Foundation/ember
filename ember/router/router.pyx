@@ -88,6 +88,14 @@ cdef class Route:
         self._simple_call    = (self._wants_request and
                                 len(self._component_types) <= 1 and
                                 not is_dynamic)
+        # Trivial path: handler can be driven synchronously from the protocol's
+        # on_message_complete (skip _handle_request coroutine + Task allocation).
+        # Requires async handler whose bytecode cannot suspend, simple-call
+        # signature, and no per-route caching/timeouts that need awaiting.
+        # AIRoute overrides this to False (it has semantic_cache to await).
+        self._trivial_path   = (self._simple_call and self._is_async and
+                                cache is None and limits is None and
+                                _handler_is_pure_sync(handler))
 
     async def call_handler(self, request, components):
         if self._simple_call:
@@ -137,6 +145,7 @@ cdef class Route:
         r._is_async        = self._is_async
         r._wants_request   = self._wants_request
         r._simple_call     = self._simple_call
+        r._trivial_path    = self._trivial_path
         for k, v in overrides.items():
             setattr(r, k, v)
         return r
@@ -159,6 +168,9 @@ cdef class AIRoute(Route):
         self.is_sse         = streaming
         self.tool_registry  = tool_registry
         self.semantic_cache = semantic_cache
+        # AIRoute always goes through _handle_request (semantic cache is async,
+        # streaming responses suspend, tool registry may need awaits).
+        self._trivial_path  = False
 
 
 cdef class Router:
@@ -293,3 +305,39 @@ def _extract_component_types(handler):
 def _handler_wants_request(handler):
     sig = inspect.signature(handler)
     return "request" in sig.parameters
+
+
+# Opcodes that prove a coroutine function might suspend. If a handler's bytecode
+# contains none of these, we can safely drive it synchronously via coro.send(None)
+# from the protocol's on_message_complete and skip the _handle_request coroutine
+# + Task allocation. Discovered at registration time; cached on Route.
+_SUSPENDING_OPS = frozenset({
+    "GET_AWAITABLE",   # `await expr`
+    "YIELD_VALUE",     # `yield expr` (async generators)
+    "YIELD_FROM",      # `yield from expr`
+    "SEND",            # 3.12+ uses SEND for await dispatch
+    "ASYNC_GEN_WRAP",  # async generator yield
+    "GET_AITER",       # `async for`
+    "GET_ANEXT",       # `async for` step
+    "BEFORE_ASYNC_WITH",  # `async with`
+})
+
+
+def _handler_is_pure_sync(handler) -> bool:
+    """Return True if `handler` is async-decorated but its body cannot suspend.
+
+    Inspects bytecode for any opcode that would cause `coro.send(None)` to
+    yield instead of raising StopIteration. False on any uncertainty
+    (functools.wraps wrappers, builtins, callables without __code__).
+    """
+    import dis
+    code = getattr(handler, "__code__", None)
+    if code is None:
+        return False
+    try:
+        for instr in dis.get_instructions(code):
+            if instr.opname in _SUSPENDING_OPS:
+                return False
+    except Exception:
+        return False
+    return True

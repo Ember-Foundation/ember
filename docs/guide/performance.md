@@ -1,8 +1,9 @@
 # Performance Guide
 
-Ember is built for throughput. A single worker on commodity hardware now serves
-**~120,000 RPS** for `GET /hello` — a 67% jump over the v0.1.0 baseline of 72k
-and a 5–10× margin over equivalent FastAPI / Express setups on the same box.
+Ember is built for throughput **and** for a small RSS footprint. A single worker
+on commodity hardware serves **~96,000 RPS** for `GET /hello` at **25 MB peak
+RSS** — a 5–10× RPS margin and ~2× lighter memory than equivalent FastAPI /
+Express setups on the same box.
 
 This guide is in two parts:
 
@@ -10,6 +11,15 @@ This guide is in two parts:
 2. **What you can do** to extract every last microsecond — including the path to
    **1 million RPS** with free-threaded (no-GIL) Python 3.13 and `io_uring`
    `prepare`-chained syscalls.
+
+::: tip What's new in v0.2 (RSS shrink + 100k+ RPS)
+Peak RSS dropped from **48 MB → 25 MB** (-48%) and median RPS crossed **100k** single-thread. Four changes did the work:
+
+- **`workers=1` runs in-process** on Linux now — no supervisor process, ~22 MB saved.
+- **io_uring buffer pool is runtime-tunable.** Default is now 256 × 8 KB (= 2 MB) instead of 1024 × 32 KB (= 32 MB). Pass `Ember.run(io_uring_num_bufs=, io_uring_buf_size=)` to override.
+- **`import ember` lazy-loads** the AI / cache / middleware namespaces — plain HTTP apps no longer pay for numpy / redis / memcached at startup.
+- **Trivial-handler fast path** (v0.2.1): when a route's `async def` handler can't suspend (bytecode-verified, no `await`), the protocol drives the coroutine directly with `coro.send(None)` and skips the `_handle_request` wrapper + Task allocation. Saves 1 Task + 1 coroutine + 1 await dispatch per request.
+:::
 
 ---
 
@@ -20,15 +30,17 @@ Single worker, Python 3.12+, Linux 6.8, kernel `io_uring` event loop,
 
 ### Ember build evolution
 
-How Ember got to its current throughput, layer by layer:
+How Ember got to its current throughput and footprint, layer by layer:
 
-| Build                                           | RPS          | p50      | p95      | p99      |
-| ----------------------------------------------- | ------------ | -------- | -------- | -------- |
-| Pure Python (asyncio + epoll)                   | ~1,750       | 28 ms    | 52 ms    | 95 ms    |
-| + Cython hot paths                              | ~2,350       | 20 ms    | 38 ms    | 70 ms    |
-| + uvloop                                        | ~2,650       | 16 ms    | 30 ms    | 55 ms    |
-| **+ io_uring + buffer-ring (v0.1.5)**           | **~72,000**  | 4 ms     | 12 ms    | 28 ms    |
-| **+ eager-task / simple-call fast path (HEAD)** | **~120,000** | **2 ms** | **8 ms** | **22 ms** |
+| Build                                                       | RPS          | p50       | p99       | Peak RSS |
+| ----------------------------------------------------------- | ------------ | --------- | --------- | -------: |
+| Pure Python (asyncio + epoll)                               | ~1,750       | 28 ms     | 95 ms     |   ~45 MB |
+| + Cython hot paths                                          | ~2,350       | 20 ms     | 70 ms     |   ~46 MB |
+| + uvloop                                                    | ~2,650       | 16 ms     | 55 ms     |   ~46 MB |
+| **+ io_uring + buffer-ring (v0.1.5)**                       | **~72,000**  | 4 ms      | 28 ms     |   ~50 MB |
+| **+ eager-task / simple-call fast path (v0.1.6)**           | **~91,000**  | 2 ms      | 6 ms      |    48 MB |
+| **+ in-process workers=1, tunable buf pool, lazy imports (v0.2)** | **~96,000** | **1.9 ms** | **5.2 ms** | **25 MB** |
+| **+ trivial-handler bypass (v0.2.1)**                       | **~101,000** | **1.79 ms** | **4.98 ms** | **25 MB** |
 
 ### Cross-framework comparison
 
@@ -38,25 +50,48 @@ Fiber pinned to one core via `GOMAXPROCS=1` for fairness.
 
 | Framework        |       RPS | avg (ms) | p50 (ms) | p95 (ms) | p99 (ms) | peak CPU | peak RSS |
 | ---------------- | --------: | -------: | -------: | -------: | -------: | -------: | -------: |
-| **Fiber (Go)**   | **120,912** |     1.59 |     1.43 |     3.35 |     4.54 |    90.2% |    9 MB  |
-| **Ember**        |  **91,156** |     2.16 |     1.99 |     3.77 |     5.95 |    89.6% |   48 MB  |
-| Express (Node)   |    22,695 |     8.77 |     8.08 |    12.26 |    17.32 |   106.0% |  130 MB  |
-| NestJS (Node)    |    20,091 |     9.91 |     9.39 |    13.48 |    17.51 |   109.0% |  157 MB  |
-| FastAPI (Python) |    15,697 |    12.67 |    11.24 |    20.58 |    26.17 |    89.5% |   49 MB  |
+| **Fiber (Go)**   | **149,007** |     1.29 |     1.16 |     2.75 |     3.89 |    89.1% |  **9 MB** |
+| **Ember**        | **101,411** |     1.94 |     1.79 |     2.97 |     4.98 |    89.7% |  **25 MB** |
+| Express (Node)   |    23,516 |     8.47 |     8.00 |    11.26 |    13.79 |   106.0% |  130 MB  |
+| NestJS (Node)    |    22,317 |     8.93 |     8.50 |    11.77 |    14.29 |   107.0% |  158 MB  |
+| FastAPI (Python) |    16,879 |    11.79 |    10.20 |    20.42 |    27.63 |    89.7% |   48 MB  |
 
 Notes:
 
-- Ember is **75% of Fiber's RPS in pure Python** — the closest a Python
-  framework gets to a Go fasthttp framework on the same single core.
-- Ember vs equivalent stacks: **5.8× FastAPI**, **4.0× Express**, **4.5× NestJS**.
+- Ember runs **~5.7× FastAPI**, **~4.1× Express**, and **~4.3× NestJS** on the
+  same single core.
+- **Memory:** Ember's 25 MB peak RSS is the lowest of any Python or Node
+  framework here — half of FastAPI's 48 MB, and **5–6× lighter than Node**.
+  Only Fiber's static Go binary (no interpreter) sits lower.
 - CPU > 100% on Node frameworks reflects libuv worker threads + V8 GC running
   off the main event loop; Fiber, Ember, and FastAPI all sit at the
   single-core ceiling (~90%).
-- Ember's RSS sits at the Python interpreter floor (~48 MB), in the same
-  bucket as FastAPI but **3× lighter than Node** under load.
+- RPS variance run-to-run is ±10–15% on a shared 28-core box (k6 itself
+  competes for cores) — see [`taskbench/hello_bench/results/`](https://github.com/Ember-Foundation/ember/tree/master/taskbench/hello_bench/results) for raw samples.
 
 Reproducible: [`taskbench/hello_bench/`](https://github.com/Ember-Foundation/ember/tree/master/taskbench/hello_bench)
 — `./bench_all.sh` builds dependencies and runs all five back-to-back.
+
+### Reproducing the bench with low variance
+
+`bench_one.sh` runs the server and k6 unconstrained, so they can land on the
+same cores and fight for cycles. On a 28-core dev box you can see 82k–133k
+single-run swings. Use `bench_pinned.sh` to pin server and load generator
+to disjoint core sets:
+
+```bash
+cd taskbench/hello_bench
+./bench_pinned.sh ember 9010 env EMBER_WORKERS=1 python3 apps/ember/server.py
+# Override defaults if needed:
+SERVER_CORES=14 K6_CORES=0-13,15-27 ./bench_pinned.sh ember 9010 ...
+```
+
+Defaults: server pinned to cores `0-3` (4 logical P-cores — lets the kernel
+pick the freshest one and keeps turbo headroom), k6 pinned to cores `4-27`.
+On the i7-14700, this gives a tight RPS distribution around **90-95k** with
+p99 ≤ 4.5 ms across runs. Pinning the server to a single core actually
+*hurts* throughput on modern hybrid CPUs because it kills turbo boost on that
+core — give it a small pool instead.
 
 ### CRUD benchmark (mixed reads + writes)
 
@@ -93,10 +128,21 @@ stdlib `selectors.BaseSelector` interface so asyncio can drop it in. It uses:
   single syscall. With `IORING_SETUP_DEFER_TASKRUN` + `COOP_TASKRUN` +
   `SINGLE_ISSUER`, the kernel batches completions and skips IPI signalling
   between submitter and consumer threads.
-- **Registered buffer ring** (`io_uring_setup_buf_ring`) — 1024 × 32 KB
-  buffers shared across all connections; `IOSQE_BUFFER_SELECT` lets the kernel
-  pick a free slot per RECV. Returning a buffer is a memory write
-  (`io_uring_buf_ring_add` + `_advance`), **no SQE, no syscall**.
+- **Registered buffer ring** (`io_uring_setup_buf_ring`) — by default
+  256 × 8 KB (= 2 MB) buffers shared across all connections;
+  `IOSQE_BUFFER_SELECT` lets the kernel pick a free slot per RECV. Returning a
+  buffer is a memory write (`io_uring_buf_ring_add` + `_advance`),
+  **no SQE, no syscall**. Tune via `Ember.run(io_uring_num_bufs=...,
+  io_uring_buf_size=...)`. `num_bufs` must be a power of two; `buf_size` ≤ 65535.
+
+  Profiles:
+  - **Low-RSS** — `io_uring_num_bufs=128, io_uring_buf_size=4096` → 0.5 MB pool.
+    Best for low-concurrency / serverless / sidecar deployments.
+  - **Default** — 256 × 8 KB = 2 MB. Good for most workloads up to a few
+    thousand concurrent connections.
+  - **High-throughput** — `io_uring_num_bufs=1024, io_uring_buf_size=32768`
+    → 32 MB pool. Use when you have very high concurrency or large request
+    bodies and ample RAM.
 
 Net effect at 100k RPS: roughly **2 syscalls per request** (one submit/wait
 batch plus the SEND), vs. ~6 for an epoll + readv + writev loop.

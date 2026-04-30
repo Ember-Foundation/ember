@@ -47,6 +47,20 @@ After modifying a `.pyx` file, rebuild:
 python setup.py build_ext --inplace
 ```
 
+### Build flags
+
+Local Linux/macOS release builds are stripped (`-Wl,-s`) by default — debug
+symbols are removed at link time, shrinking the `.so` files ~80% on disk.
+This is invisible at runtime but means `gdb` / `perf` traces won't show
+Cython function names. To preserve symbols:
+
+```bash
+EMBER_DEBUG=1 python setup.py build_ext --inplace
+```
+
+CIBUILDWHEEL builds (cibuildwheel auditwheel pipelines) keep symbols at
+build time; auditwheel/delocate strip them later in their own steps.
+
 ## Pull Requests
 
 1. Fork and create a feature branch

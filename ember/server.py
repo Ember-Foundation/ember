@@ -60,7 +60,17 @@ class Ember(EmberApplication):
         necromancer: bool = True,
         startup_message: bool = True,
         thread_pool_workers: int | None = None,
+        io_uring_num_bufs: int = 256,
+        io_uring_buf_size: int = 8192,
     ) -> None:
+        """Start the Ember server.
+
+        io_uring_num_bufs / io_uring_buf_size tune the io_uring shared buffer
+        pool (Linux only; ignored on macOS/Windows). Defaults: 256 × 8 KB =
+        2 MB. Raise for very high concurrency or large request bodies; e.g.
+        1024 × 32 KB = 32 MB matches the legacy default.
+        num_bufs must be a power of two; buf_size must be ≤ 65535.
+        """
         self.debug = debug
 
         if _IS_WINDOWS:
@@ -74,7 +84,8 @@ class Ember(EmberApplication):
             if startup_message:
                 _print_banner(host, port, num_workers, debug)
             sock = _make_socket(host, port)
-            self._run_inprocess(host, port, sock, thread_pool_workers)
+            self._run_inprocess(host, port, sock, thread_pool_workers,
+                                io_uring_num_bufs, io_uring_buf_size)
             return
 
         # ── Linux / macOS: fork-based multi-process workers ──────────────────
@@ -83,6 +94,14 @@ class Ember(EmberApplication):
             _print_banner(host, port, num_workers, debug)
 
         sock = _make_socket(host, port)
+
+        # workers=1: skip the supervisor and serve in-process. Saves ~22 MB
+        # (one Python interpreter) compared to fork+monitor when there's
+        # nothing to load-balance and nothing to revive.
+        if num_workers == 1:
+            self._run_inprocess(host, port, sock, thread_pool_workers,
+                                io_uring_num_bufs, io_uring_buf_size)
+            return
 
         from .workers.handler import RequestHandler
 
@@ -98,6 +117,8 @@ class Ember(EmberApplication):
                 thread_pool_workers=thread_pool_workers,
                 keep_alive_timeout=keep_alive,
                 debug=debug,
+                io_uring_num_bufs=io_uring_num_bufs,
+                io_uring_buf_size=io_uring_buf_size,
             )
             p.start()
             worker_processes.append(p)
@@ -129,6 +150,8 @@ class Ember(EmberApplication):
                                 thread_pool_workers=thread_pool_workers,
                                 keep_alive_timeout=keep_alive,
                                 debug=debug,
+                                io_uring_num_bufs=io_uring_num_bufs,
+                                io_uring_buf_size=io_uring_buf_size,
                             )
                             new_p.start()
                             worker_processes[i] = new_p
@@ -150,10 +173,13 @@ class Ember(EmberApplication):
         port: int,
         sock: socket.socket,
         thread_pool_workers: int | None,
+        io_uring_num_bufs: int = 256,
+        io_uring_buf_size: int = 8192,
     ) -> None:
         """Single-process event loop — used on Windows and when workers=1 is forced."""
         try:
-            from .eventloop import new_event_loop
+            from .eventloop import install_best_event_loop, new_event_loop
+            install_best_event_loop(num_bufs=io_uring_num_bufs, buf_size=io_uring_buf_size)
             loop = new_event_loop()
         except Exception:
             loop = asyncio.new_event_loop()
@@ -181,6 +207,8 @@ class Ember(EmberApplication):
             thread_pool_workers=thread_pool_workers,
             keep_alive_timeout=self._server_limits.keep_alive_timeout,
             debug=self.debug,
+            io_uring_num_bufs=io_uring_num_bufs,
+            io_uring_buf_size=io_uring_buf_size,
         )
 
         try:

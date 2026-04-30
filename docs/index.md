@@ -4,7 +4,7 @@ layout: home
 hero:
   name: "🔥 Ember"
   text: "The Python framework that runs at Go-tier speed"
-  tagline: 91k RPS single-worker · llhttp + Cython + io_uring · first-class LLM streaming · Python 3.12+
+  tagline: 100k+ RPS single-worker at 25 MB RSS · llhttp + Cython + io_uring · first-class LLM streaming · Python 3.12+
   actions:
     - theme: brand
       text: Get Started
@@ -22,7 +22,7 @@ hero:
 features:
   - icon: ⚡
     title: Fast by Default
-    details: "llhttp C parser, Cython-compiled router/request/response, and an io_uring event loop. 91k+ RPS single-worker at p50 ~2 ms — 4× Express, 5.8× FastAPI, 75% of Go Fiber on identical hardware."
+    details: "llhttp C parser, Cython-compiled router/request/response, and an io_uring event loop. 100k+ RPS single-thread at p50 ~1.8 ms and just 25 MB RSS — 4.3× Express, 6.0× FastAPI, in the same league as Go Fiber on identical hardware."
     link: /guide/performance
     linkText: See benchmarks →
 
@@ -63,13 +63,13 @@ features:
 
 | Framework         |          RPS | p50 (ms) | p99 (ms) | Peak RSS |
 | ----------------- | -----------: | -------: | -------: | -------: |
-| **Fiber (Go)**    |  **120,912** |     1.43 |     4.54 |     9 MB |
-| **Ember**         |   **91,156** |     1.99 |     5.95 |    48 MB |
-| Express (Node)    |       22,695 |     8.08 |    17.32 |   130 MB |
-| NestJS (Node)     |       20,091 |     9.39 |    17.51 |   157 MB |
-| FastAPI (Python)  |       15,697 |    11.24 |    26.17 |    49 MB |
+| **Fiber (Go)**    |  **149,007** |     1.16 |     3.89 |  **9 MB** |
+| **Ember**         |  **101,411** |     1.79 |     4.98 | **25 MB** |
+| Express (Node)    |       23,516 |     8.00 |    13.79 |   130 MB |
+| NestJS (Node)     |       22,317 |     8.50 |    14.29 |   158 MB |
+| FastAPI (Python)  |       16,879 |    10.20 |    27.63 |    48 MB |
 
-Ember reaches **75% of Fiber's throughput in pure Python**, while running **5.8× FastAPI**, **4.0× Express**, and **4.5× NestJS** on identical hardware. → [Full benchmark methodology](/guide/performance#cross-framework-comparison)
+Ember runs **6.0× FastAPI**, **4.3× Express**, and **4.5× NestJS** on identical hardware — and at **101k RPS / 25 MB RSS**, it's the only Python framework that breaks 100k single-thread without ballooning memory. → [Full benchmark methodology](/guide/performance#cross-framework-comparison)
 
 ## Hello, Ember
 
