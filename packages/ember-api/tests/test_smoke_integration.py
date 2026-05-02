@@ -19,7 +19,6 @@ from ember import (
     Ember,
     JSONResponse,
     MethodNotAllowed,
-    Request,
     Response,
     RouteNotFound,
 )

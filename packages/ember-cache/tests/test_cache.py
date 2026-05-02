@@ -1,8 +1,5 @@
 import asyncio
-import time
 from types import SimpleNamespace
-
-import pytest
 
 from ember.cache import (
     CachedResponse,
