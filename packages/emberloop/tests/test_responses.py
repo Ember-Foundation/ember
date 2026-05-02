@@ -1,6 +1,6 @@
 import pytest
 from ember.response.response import (
-    Response, JSONResponse, CachedResponse, RedirectResponse,
+    Response, JSONResponse, RedirectResponse,
     SSEResponse,
 )
 
@@ -44,20 +44,6 @@ class TestJSONResponse:
     def test_nested_data(self):
         r = JSONResponse({"nested": {"a": [1, 2, 3]}})
         assert b'"nested"' in r.encode()
-
-
-class TestCachedResponse:
-    def test_from_response(self):
-        original = JSONResponse({"test": True})
-        cached = CachedResponse.from_response(original)
-        assert cached.encode() == original.encode()
-
-    def test_cached_bytes_identity(self):
-        original = Response(b"data")
-        cached = CachedResponse.from_response(original)
-        b1 = cached.encode()
-        b2 = cached.encode()
-        assert b1 is b2
 
 
 class TestRedirectResponse:

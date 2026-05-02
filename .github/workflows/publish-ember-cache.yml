@@ -1,0 +1,43 @@
+name: Publish ember-cache
+
+on:
+  push:
+    tags: ["ember-cache-v*.*.*"]
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "testpypi or pypi"
+        required: true
+        default: "testpypi"
+        type: choice
+        options: [testpypi, pypi]
+
+defaults:
+  run:
+    working-directory: packages/ember-cache
+
+jobs:
+  build-and-publish:
+    name: Build sdist+wheel and publish
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+
+      - name: Build sdist + wheel (pure Python)
+        run: uv build
+
+      - run: ls -lh dist/
+
+      - name: twine check
+        run: uv tool run --from twine twine check dist/*
+
+      - name: Publish to TestPyPI
+        if: github.event_name == 'workflow_dispatch' && inputs.target == 'testpypi'
+        run: uv publish --publish-url https://test.pypi.org/legacy/ dist/*
+
+      - name: Publish to PyPI
+        if: startsWith(github.ref, 'refs/tags/ember-cache-v') || (github.event_name == 'workflow_dispatch' && inputs.target == 'pypi')
+        run: uv publish dist/*

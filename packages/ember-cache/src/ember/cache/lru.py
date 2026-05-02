@@ -1,15 +1,16 @@
 """
 Route-level response caches.
-StaticCache is compiled by Cython via cache.pxd.
 """
 from __future__ import annotations
 import asyncio
 import time
 from typing import Callable, TYPE_CHECKING
 
+from .cached_response import CachedResponse
+
 if TYPE_CHECKING:
-    from ..request import Request
-    from ..response import Response, CachedResponse
+    from ember.request import Request
+    from ember.response import Response
 
 
 class CacheEngine:
@@ -46,7 +47,6 @@ class StaticCache(CacheEngine):
         return self._cached
 
     def store(self, request: "Request", response: "Response") -> None:
-        from ..response import CachedResponse
         if self._cached is None:
             self._cached = CachedResponse.from_response(response)
 
@@ -118,7 +118,6 @@ class TTLCache(CacheEngine):
         return None
 
     async def store(self, request: "Request", response: "Response") -> None:
-        from ..response import CachedResponse
         key = self._key_fn(request)
         cached = CachedResponse.from_response(response)
         if len(self._entries) >= self._max and key not in self._entries:

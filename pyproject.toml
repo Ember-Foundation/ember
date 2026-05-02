@@ -1,43 +1,33 @@
-[build-system]
-requires = ["setuptools>=68", "cython>=3.0", "wheel"]
-build-backend = "setuptools.build_meta"
-
 [project]
-name = "ember-api"
-version = "0.1.0"
-description = "The fastest Python web framework — Cython hot paths, io_uring, multi-process workers, built-in TTL + single-flight caching"
-readme = "README.md"
+name = "ember-monorepo"
+version = "0"
+description = "Workspace root — see packages/ember-api, packages/ember-cache, packages/emberloop"
 requires-python = ">=3.12"
-license = { text = "MIT" }
-authors = [
-    { name = "Mohammad Ismail", email = "ismail.buet404@gmail.com" },
+dependencies = [
+    "emberloop",
+    "ember-cache",
+    "ember-api",
 ]
-classifiers = [
-    "Development Status :: 3 - Alpha",
-    "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License",
-    "Programming Language :: Python :: 3.12",
-    "Programming Language :: Python :: 3.13",
-    "Programming Language :: Python :: Implementation :: CPython",
-    "Topic :: Internet :: WWW/HTTP :: HTTP Servers",
-    "Topic :: Software Development :: Libraries :: Application Frameworks",
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    "httpx>=0.27",
+    "cython>=3.0",
+    "setuptools>=68",
+    "wheel",
+    "build",
 ]
-dependencies = ["cython>=3.0"]
 
-[project.optional-dependencies]
-fast       = ["uvloop>=0.19", "orjson>=3.9"]
-redis      = ["redis[asyncio]>=5.0"]
-memcached  = ["aiomcache>=0.8"]
-cache      = ["redis[asyncio]>=5.0", "aiomcache>=0.8"]
-dev        = ["pytest>=8.0", "pytest-asyncio>=0.23", "httpx>=0.27"]
-all        = ["uvloop>=0.19", "orjson>=3.9", "redis[asyncio]>=5.0", "aiomcache>=0.8", "httpx>=0.27"]
+[tool.uv.workspace]
+members = ["packages/*"]
 
-[project.scripts]
-ember = "ember.cli:cli"
-
-[tool.setuptools.packages.find]
-exclude = ["tests*", "examples*"]
+[tool.uv.sources]
+emberloop    = { workspace = true }
+ember-cache  = { workspace = true }
+ember-api    = { workspace = true }
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
-testpaths    = ["tests"]
+testpaths    = ["packages/emberloop/tests", "packages/ember-cache/tests", "packages/ember-api/tests"]

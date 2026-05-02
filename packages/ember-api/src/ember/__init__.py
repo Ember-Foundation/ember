@@ -10,6 +10,12 @@ Engineered for raw speed and concurrency:
   - First-class SSE streaming, AI primitives, conversation context, model routing
 """
 import importlib as _importlib
+import pkgutil as _pkgutil
+
+# Extend the package's __path__ to include `ember/` directories from sibling
+# distributions (emberloop, ember-cache). They contribute submodules like
+# ember.protocol, ember.eventloop, ember.cache without owning ember/__init__.py.
+__path__ = _pkgutil.extend_path(__path__, __name__)
 
 try:
     from .eventloop import install_best_event_loop

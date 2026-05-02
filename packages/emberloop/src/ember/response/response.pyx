@@ -5,7 +5,7 @@ Cython response classes.
 Key optimisations vs the pure-Python version:
 - ujson/json selected ONCE at module import — no try/except per JSONResponse
 - Response._header_prefix built in __init__ — no .encode('latin-1') per send()
-- Response, JSONResponse, CachedResponse are cdef classes — C-typed fields,
+- Response, JSONResponse are cdef classes — C-typed fields,
   no __dict__, cpdef send/encode avoids Python method dispatch from hot path
 - StreamingResponse / SSEResponse / TokenStreamResponse stay as Python classes
   (async generators and complex async methods; Cython gain there is minimal)
@@ -105,26 +105,6 @@ cdef class JSONResponse(Response):
             headers=headers,
             content_type=CONTENT_TYPE_JSON,
         )
-
-
-# ── CachedResponse ────────────────────────────────────────────────────────────
-
-cdef class CachedResponse(Response):
-    """Pre-encoded response — encode() returns the stored bytes directly."""
-
-    def __init__(self, bytes raw):
-        self.body           = b''
-        self.status_code    = 200
-        self._headers       = {}
-        self._header_prefix = b''
-        self._cached_bytes  = raw
-
-    cpdef bytes encode(self):
-        return self._cached_bytes
-
-    @classmethod
-    def from_response(cls, Response response):
-        return cls(response.encode())
 
 
 # ── RedirectResponse ──────────────────────────────────────────────────────────

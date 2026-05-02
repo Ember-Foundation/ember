@@ -5,7 +5,6 @@ from .response import (
     SSEResponse,
     TokenStreamResponse,
     RedirectResponse,
-    CachedResponse,
 )
 
 __all__ = [
@@ -15,5 +14,4 @@ __all__ = [
     "SSEResponse",
     "TokenStreamResponse",
     "RedirectResponse",
-    "CachedResponse",
 ]

@@ -73,27 +73,6 @@ class JSONResponse(Response):
                          content_type=CONTENT_TYPE_JSON)
 
 
-class CachedResponse(Response):
-    """Pre-encoded response that skips re-encoding on every request."""
-
-    __slots__ = ("_raw",)
-
-    def __init__(self, raw: bytes) -> None:
-        self._raw = raw
-        # Bypass parent __init__ to avoid double-encoding
-        self.body = b""
-        self.status_code = 200
-        self._headers = {}
-        self._cached_bytes = raw
-
-    def encode(self) -> bytes:
-        return self._raw
-
-    @classmethod
-    def from_response(cls, response: Response) -> "CachedResponse":
-        return cls(response.encode())
-
-
 class RedirectResponse(Response):
     def __init__(self, location: str, status_code: int = 302) -> None:
         super().__init__(

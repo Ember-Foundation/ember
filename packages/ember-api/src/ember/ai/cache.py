@@ -3,9 +3,11 @@ import hashlib
 import time
 from typing import Any, TYPE_CHECKING
 
+from ember.cache import CachedResponse
+
 if TYPE_CHECKING:
-    from ..request import Request
-    from ..response import Response
+    from ember.request import Request
+    from ember.response import Response
 
 
 class SemanticCache:
@@ -55,8 +57,6 @@ class SemanticCache:
         return request.url.decode("latin-1")
 
     async def get(self, request: "Request") -> "Response | None":
-        from ..response import CachedResponse
-
         if not self._mem_cache and self.vector_backend is None:
             return None
 

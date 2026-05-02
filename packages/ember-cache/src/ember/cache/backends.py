@@ -21,10 +21,21 @@ import warnings
 from typing import Callable, Any, TYPE_CHECKING
 
 from .lru import CacheEngine
+from .cached_response import CachedResponse
+
+try:
+    import redis.asyncio as aioredis
+except ImportError:
+    aioredis = None
+
+try:
+    import aiomcache
+except ImportError:
+    aiomcache = None
 
 if TYPE_CHECKING:
-    from ..request import Request
-    from ..response import Response, CachedResponse
+    from ember.request import Request
+    from ember.response import Response
 
 logger = logging.getLogger("ember.cache")
 
@@ -127,13 +138,11 @@ class RedisCache(DistributedCache):
     async def connect(self) -> None:
         if self._client is not None:
             return
-        try:
-            import redis.asyncio as aioredis
-        except ImportError as exc:
+        if aioredis is None:
             raise ImportError(
                 "RedisCache requires 'redis[asyncio]>=5.0'. "
                 "Install it: pip install 'redis[asyncio]'"
-            ) from exc
+            )
         self._client = aioredis.from_url(self._url, decode_responses=False)
         logger.info("RedisCache connected to %s", self._url)
 
@@ -151,7 +160,6 @@ class RedisCache(DistributedCache):
             logger.warning("RedisCache.get error: %s", exc)
             return None
         if data:
-            from ..response import CachedResponse
             return CachedResponse(data)
         return None
 
@@ -223,13 +231,11 @@ class MemcachedCache(DistributedCache):
     async def connect(self) -> None:
         if self._client is not None:
             return
-        try:
-            import aiomcache
-        except ImportError as exc:
+        if aiomcache is None:
             raise ImportError(
                 "MemcachedCache requires 'aiomcache>=0.8'. "
                 "Install it: pip install aiomcache"
-            ) from exc
+            )
         self._client = aiomcache.Client(
             self._host, self._port, pool_size=self._pool_size
         )
@@ -249,7 +255,6 @@ class MemcachedCache(DistributedCache):
             logger.warning("MemcachedCache.get error: %s", exc)
             return None
         if data:
-            from ..response import CachedResponse
             return CachedResponse(data)
         return None
 

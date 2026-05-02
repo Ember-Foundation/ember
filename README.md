@@ -8,6 +8,18 @@
 
 📖 **[Documentation](https://ember-foundation.github.io/ember/)** · 🐙 **[GitHub](https://github.com/Ember-Foundation/ember)** · 🤝 **[Contributing](https://github.com/Ember-Foundation/ember/blob/master/CONTRIBUTING.md)**
 
+## Packages
+
+This repository is a uv workspace publishing three independent PyPI packages:
+
+| Package | Purpose | Install |
+|---|---|---|
+| **[ember-api](packages/ember-api/)** | Full framework (router, middleware, AI, sessions, CLI, workers) | `pip install ember-api` |
+| **[ember-cache](packages/ember-cache/)** | TTL + single-flight cache, plus Redis & Memcached backends | `pip install ember-cache` |
+| **[emberloop](packages/emberloop/)** | io_uring event loop + Cython HTTP/1.1 protocol layer | `pip install emberloop` |
+
+`ember-api` depends on the other two — installing it pulls them in automatically. All three live under the shared `ember.*` import namespace.
+
 ---
 
 ## Why Ember

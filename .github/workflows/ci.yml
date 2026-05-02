@@ -8,55 +8,41 @@ on:
 
 jobs:
   test:
-    name: Test (Python ${{ matrix.python-version }})
-    runs-on: ubuntu-latest
+    name: Test (${{ matrix.package }} / py${{ matrix.python-version }} / ${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
+        package: [emberloop, ember-cache, ember-api]
         python-version: ["3.12", "3.13"]
+        os: [ubuntu-latest, macos-14]
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install liburing-dev (for io_uring extension)
+      - name: Install liburing-dev (Linux only, for emberloop io_uring)
+        if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y liburing-dev
 
       - name: Install uv
         uses: astral-sh/setup-uv@v3
         with:
           enable-cache: true
-          cache-dependency-glob: "pyproject.toml"
+          cache-dependency-glob: "**/pyproject.toml"
 
       - name: Set up Python ${{ matrix.python-version }}
         run: uv python install ${{ matrix.python-version }}
 
-      - name: Install dependencies
-        run: |
-          uv venv --python ${{ matrix.python-version }}
-          uv pip install --upgrade setuptools wheel cython
-          uv pip install -e ".[dev]"
+      - name: Sync workspace
+        run: uv sync --python ${{ matrix.python-version }}
 
-      - name: Build Cython extensions inplace
-        run: uv run python setup.py build_ext --inplace
-
-      - name: Verify Cython extensions loaded
-        run: |
-          uv run python -c "
-          for m in [
-            'ember.protocol.cprotocol',
-            'ember.router.router',
-            'ember.request.request',
-            'ember.response.response',
-            'ember.headers.headers',
-            'ember.eventloop.uring',
-          ]:
-              __import__(m)
-          print('All Cython extensions OK')
-          "
+      - name: Build Cython extensions
+        if: matrix.package != 'ember-cache'
+        run: uv run --directory packages/${{ matrix.package }} python setup.py build_ext --inplace
 
       - name: Run tests
-        run: uv run pytest --tb=short -q
+        run: uv run pytest packages/${{ matrix.package }}/tests --tb=short -q
 
   lint:
     name: Lint
@@ -66,4 +52,4 @@ jobs:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v3
       - run: uv tool install ruff
-      - run: uv tool run ruff check ember/ tests/ --ignore E501
+      - run: uv tool run ruff check packages/ --ignore E501

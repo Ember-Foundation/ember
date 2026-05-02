@@ -1,7 +1,8 @@
 # cython: language_level=3
 # Declaration file for response extension.
 # StreamingResponse / SSEResponse / TokenStreamResponse are regular Python
-# classes in the .pyx; only the three below are cdef classes.
+# classes in the .pyx; only the two below are cdef classes.
+# CachedResponse lives in ember-cache as a pure-Python subclass of Response.
 
 cdef class Response:
     cdef public bytes body
@@ -15,7 +16,4 @@ cdef class Response:
     cpdef void  send(self, object protocol)
 
 cdef class JSONResponse(Response):
-    pass
-
-cdef class CachedResponse(Response):
     pass
